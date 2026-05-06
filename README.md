@@ -29,6 +29,7 @@ GPUBeat 通过 SSH 连接远程服务器执行 `nvidia-smi`，将多台 GPU 服�
 ### 📸 截图
 
 ![light](screenshot/light.png)
+![light](screenshot/light-2.png)
 ![dark](screenshot/dark.png)
 
 ### 🚀 快速开始
