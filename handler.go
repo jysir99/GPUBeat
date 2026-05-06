@@ -3,8 +3,10 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 //go:embed web/index.html
@@ -53,4 +55,12 @@ func handleGPUStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(data)
+}
+
+func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next(w, r)
+		log.Printf("[HTTP] %s %s %s %v", r.Method, r.URL.Path, r.RemoteAddr, time.Since(start))
+	}
 }

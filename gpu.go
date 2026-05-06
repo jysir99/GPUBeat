@@ -27,12 +27,24 @@ type ProcessInfo struct {
 	Username       string  `json:"username"`
 }
 
+type SysInfo struct {
+	CPUUsage   float64 `json:"cpu_usage"`
+	MemUsed    float64 `json:"mem_used"`
+	MemTotal   float64 `json:"mem_total"`
+	MemPercent float64 `json:"mem_percent"`
+	Load1      float64 `json:"load_1"`
+	Load5      float64 `json:"load_5"`
+	Load15     float64 `json:"load_15"`
+}
+
 type HostGPUData struct {
 	Hostname string    `json:"hostname"`
 	Host     string    `json:"host"`
 	Status   string    `json:"status"`
 	Error    string    `json:"error,omitempty"`
 	GPUs     []GPUInfo `json:"gpus"`
+	Sys      SysInfo   `json:"sys"`
+	Order    int       `json:"-"`
 }
 
 func ParseGPUData(rawOutput, hostname, host string) *HostGPUData {
@@ -46,6 +58,12 @@ func ParseGPUData(rawOutput, hostname, host string) *HostGPUData {
 	gpuSection := rawOutput
 	processSection := ""
 	userSection := ""
+	sysSection := ""
+
+	if idx := strings.Index(rawOutput, "===SYSINFO==="); idx >= 0 {
+		sysSection = rawOutput[idx+len("===SYSINFO==="):]
+		rawOutput = rawOutput[:idx]
+	}
 
 	if idx := strings.Index(rawOutput, "===PROCESSES==="); idx >= 0 {
 		gpuSection = rawOutput[:idx]
@@ -62,6 +80,7 @@ func ParseGPUData(rawOutput, hostname, host string) *HostGPUData {
 	busMap := make(map[string]int)
 	result.GPUs = parseGPUSection(gpuSection, busMap)
 	assignProcesses(processSection, busMap, userMap, result.GPUs)
+	result.Sys = parseSysSection(sysSection)
 
 	if len(result.GPUs) == 0 && gpuSection != "" {
 		result.Status = "error"
@@ -186,6 +205,31 @@ func assignProcesses(section string, busMap map[string]int, userMap map[string]s
 			}
 		}
 	}
+}
+
+func parseSysSection(section string) SysInfo {
+	var sys SysInfo
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "CPU:") {
+			sys.CPUUsage = safeFloat(strings.TrimPrefix(line, "CPU:"))
+		} else if strings.HasPrefix(line, "MEM:") {
+			parts := strings.Split(strings.TrimPrefix(line, "MEM:"), "/")
+			if len(parts) == 3 {
+				sys.MemUsed = safeFloat(parts[0])
+				sys.MemTotal = safeFloat(parts[1])
+				sys.MemPercent = safeFloat(parts[2])
+			}
+		} else if strings.HasPrefix(line, "LOAD:") {
+			parts := strings.Fields(strings.TrimPrefix(line, "LOAD:"))
+			if len(parts) >= 3 {
+				sys.Load1 = safeFloat(parts[0])
+				sys.Load5 = safeFloat(parts[1])
+				sys.Load15 = safeFloat(parts[2])
+			}
+		}
+	}
+	return sys
 }
 
 func safeFloat(s string) float64 {
