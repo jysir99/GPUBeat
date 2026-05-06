@@ -1,6 +1,6 @@
 <div align="center">
 
-# GPUBeat
+# 🖥️ GPUBeat
 
 **多服务器 GPU 实时监控看板**
 
@@ -12,26 +12,26 @@
 
 ---
 
-## 中文
+## 📖 中文
 
 GPUBeat 通过 SSH 连接远程服务器执行 `nvidia-smi`，将多台 GPU 服务器的状态集中展示在 Web 看板上。采用连接池复用 SSH 连接，支持断线自动重连。
 
-### 特性
+### ✨ 特性
 
-- **多服务器** — 同时监控多台 GPU 服务器，统一看板展示
-- **GPU 状态** — 温度、利用率、显存、功耗、进程及用户追踪
-- **系统信息** — CPU 使用率、内存占用、系统负载
-- **可视化** — ECharts 饼图、柱状图、折线趋势，温度按值自动着色
-- **连接池** — SSH 连接复用，断线自动重连，多用户访问不增加 SSH 负担
-- **日志系统** — 按服务器、按日期记录历史数据
-- **单文件部署** — 前端通过 `go:embed` 嵌入，编译后只需一个二进制 + 配置文件
+- 🌐 **多服务器** — 同时监控多台 GPU 服务器，统一看板展示
+- 📊 **GPU 状态** — 温度、利用率、显存、功耗、进程及用户追踪
+- 🖧 **系统信息** — CPU 使用率、内存占用、系统负载
+- 📈 **可视化** — ECharts 饼图、柱状图、折线趋势，温度按值自动着色
+- 🔌 **连接池** — SSH 连接复用，断线自动重连，多用户访问不增加 SSH 负担
+- 📝 **日志系统** — 按服务器、按日期记录历史数据
+- 📦 **单文件部署** — 前端通过 `go:embed` 嵌入，编译后只需一个二进制 + 配置文件
 
-### 截图
+### 📸 截图
 
 ![light](screenshot/light.png)
 ![dark](screenshot/dark.png)
 
-### 快速开始
+### 🚀 快速开始
 
 **编译**
 
@@ -66,9 +66,9 @@ hosts:
 ./gpubeat -c /path/to.yaml # 指定配置路径
 ```
 
-访问 `http://localhost:9988`
+访问 `http://localhost:9988` 🎉
 
-### 架构
+### 🏗️ 架构
 
 ```
 浏览器 ──HTTP──▶ Go 服务 ──内存缓存──▶ 多用户零 SSH 开销
@@ -80,7 +80,7 @@ hosts:
             nvidia-smi（GPU + 进程 + 系统信息）
 ```
 
-### 项目结构
+### 📂 项目结构
 
 ```
 ├── main.go              # 入口，后台刷新调度
@@ -94,11 +94,11 @@ hosts:
 └── config.example.yaml  # 配置示例
 ```
 
-### 技术栈
+### 🛠️ 技术栈
 
-Go · Vue 2 · ECharts · SSH · go:embed
+`Go` · `Vue 2` · `ECharts` · `SSH` · `go:embed`
 
-### 开源许可
+### 📄 开源许可
 
 [MIT License](LICENSE)
 
@@ -106,21 +106,21 @@ Go · Vue 2 · ECharts · SSH · go:embed
 
 <a id="english"></a>
 
-## English
+## 📖 English
 
 GPUBeat is a lightweight GPU cluster monitoring dashboard that connects to remote servers via SSH and collects GPU status through `nvidia-smi`. It features an SSH connection pool with automatic reconnection, presenting all servers in a unified web dashboard.
 
-### Features
+### ✨ Features
 
-- **Multi-server** — Monitor multiple GPU servers from a single dashboard
-- **GPU Metrics** — Temperature, utilization, VRAM, power draw, processes & user tracking
-- **System Info** — CPU usage, memory usage, system load averages
-- **Visualization** — ECharts pie charts, bar charts, trend lines with temperature-based coloring
-- **Connection Pool** — Persistent SSH connections with auto-reconnect; multi-user access adds zero SSH overhead
-- **Logging** — Per-server, per-day historical data logging
-- **Single Binary** — Frontend embedded via `go:embed`, deploy with just one binary + config file
+- 🌐 **Multi-server** — Monitor multiple GPU servers from a single dashboard
+- 📊 **GPU Metrics** — Temperature, utilization, VRAM, power draw, processes & user tracking
+- 🖧 **System Info** — CPU usage, memory usage, system load averages
+- 📈 **Visualization** — ECharts pie charts, bar charts, trend lines with temperature-based coloring
+- 🔌 **Connection Pool** — Persistent SSH connections with auto-reconnect; multi-user access adds zero SSH overhead
+- 📝 **Logging** — Per-server, per-day historical data logging
+- 📦 **Single Binary** — Frontend embedded via `go:embed`, deploy with just one binary + config file
 
-### Quick Start
+### 🚀 Quick Start
 
 **Build**
 
@@ -143,12 +143,12 @@ Edit `config.yaml` with your server SSH credentials.
 ./gpubeat -c /path/to.yaml # specify config path
 ```
 
-Open `http://localhost:9988`
+Open `http://localhost:9988` 🎉
 
-### Tech Stack
+### 🛠️ Tech Stack
 
-Go · Vue 2 · ECharts · SSH · go:embed
+`Go` · `Vue 2` · `ECharts` · `SSH` · `go:embed`
 
-### License
+### 📄 License
 
 [MIT License](LICENSE)
