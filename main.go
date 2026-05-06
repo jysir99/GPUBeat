@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const nvidiaSMICmd = `nvidia-smi --query-gpu=index,gpu_bus_id,name,temperature.gpu,utilization.gpu,memory.used,memory.total,utilization.memory,power.draw,enforced.power.limit --format=csv,noheader,nounits && echo "===PROCESSES===" && (nvidia-smi --query-compute-apps=gpu_bus_id,pid,process_name,used_gpu_memory --format=csv,noheader 2>/dev/null || echo "") && echo "===USERS===" && ps -eo user,pid --no-headers 2>/dev/null && echo "===SYSINFO===" && echo "CPU:$(top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}')" && echo "MEM:$(awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{u=t-a;if(t>0)printf "%.0f/%.0f/%.0f",u/1024,t/1024,u/t*100}' /proc/meminfo)" && echo "LOAD:$(awk '{print $1,$2,$3}' /proc/loadavg)"`
+const nvidiaSMICmd = `nvidia-smi --query-gpu=index,gpu_bus_id,name,temperature.gpu,utilization.gpu,memory.used,memory.total,utilization.memory,power.draw,enforced.power.limit --format=csv,noheader,nounits && echo "===PROCESSES===" && (nvidia-smi --query-compute-apps=gpu_bus_id,pid,process_name,used_gpu_memory --format=csv,noheader 2>/dev/null || echo "") && echo "===USERS===" && ps -eo user:30,pid --no-headers 2>/dev/null && echo "===SYSINFO===" && echo "CPU:$(top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}')" && echo "MEM:$(awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{u=t-a;if(t>0)printf "%.0f/%.0f/%.0f",u/1024,t/1024,u/t*100}' /proc/meminfo)" && echo "LOAD:$(awk '{print $1,$2,$3}' /proc/loadavg)"`
 
 func getExeDir() string {
 	exe, err := os.Executable()
@@ -45,7 +45,7 @@ func fetchHost(hostCfg HostConfig, idx int, wg *sync.WaitGroup, results chan<- *
 	results <- data
 }
 
-func backgroundRefresh(cfg *Config) {
+func backgroundRefresh(cfg *Config, logger *Logger) {
 	for {
 		start := time.Now()
 		var wg sync.WaitGroup
@@ -70,6 +70,9 @@ func backgroundRefresh(cfg *Config) {
 				online++
 			} else {
 				failed++
+			}
+			if logger != nil {
+				logger.LogHost(d)
 			}
 		}
 
@@ -97,7 +100,18 @@ func main() {
 	log.Printf("配置加载成功: %d 台服务器, 端口 %d, 刷新间隔 %ds",
 		len(cfg.Hosts), cfg.Server.Port, cfg.Server.Refresh)
 
-	go backgroundRefresh(cfg)
+	logger, err := NewLogger(filepath.Join(getExeDir(), "log"))
+	if err != nil {
+		log.Printf("日志系统初始化失败: %v, 继续运行", err)
+		logger = nil
+	}
+	defer func() {
+		if logger != nil {
+			logger.Close()
+		}
+	}()
+
+	go backgroundRefresh(cfg, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", loggingMiddleware(handleIndex))

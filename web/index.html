@@ -58,7 +58,9 @@
 
         .navbar { background: var(--bg-nav); padding: 10px 24px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; box-shadow: 0 2px 10px var(--shadow); position: sticky; top: 0; z-index: 100; transition: background 0.3s; }
         .navbar .title { font-size: 20px; font-weight: 700; color: var(--text-nav-title); white-space: nowrap; }
-        .navbar .center { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--text-nav); font-size: 14px; }
+        .navbar .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; color: var(--text-nav); }
+        .clock-main { font-size: 15px; font-weight: 600; letter-spacing: 1px; }
+        .clock-sub { font-size: 11px; opacity: 0.6; margin-top: 1px; }
         .error-badge { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
         .navbar .controls { display: flex; align-items: center; gap: 8px; white-space: nowrap; justify-self: end; }
         .navbar .controls select, .navbar .controls input { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-nav-btn); background: var(--bg-nav-btn); color: var(--text-primary); font-size: 13px; }
@@ -120,12 +122,14 @@
         tr.host-separator:first-child td { border-top: none; }
         .host-tag { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
         .sep-name { font-weight: 700; font-size: 14px; color: var(--text-primary); }
+        .sep-host-info { display: inline-flex; align-items: center; min-width: 200px; flex-shrink: 0; }
         .sep-status { font-size: 11px; padding: 2px 8px; border-radius: 8px; margin-left: 8px; }
         .sep-status.online { background: rgba(39,174,96,0.3); color: #2ecc71; }
         .sep-status.error { background: rgba(231,76,60,0.3); color: #e74c3c; }
         .sep-gpu-count { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
         .sep-sys { font-size: 12px; color: var(--text-muted); margin-left: 10px; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
         .sep-sys strong { font-weight: 600; color: var(--text-primary); }
+        .sys-mem-val { display: inline-block; min-width: 110px; font-weight: 600; color: var(--text-primary); }
         .sys-mem-mini { display: inline-block; width: 40px; height: 6px; background: rgba(128,128,128,0.2); border-radius: 3px; overflow: hidden; vertical-align: middle; }
         .sys-mem-mini-inner { display: block; height: 100%; border-radius: 3px; transition: width 0.6s ease; }
         .view-detail { margin-left: auto; font-size: 12px; font-weight: 400; color: #3498db; cursor: pointer; transition: color 0.2s; flex-shrink: 0; }
@@ -169,7 +173,8 @@
     <div class="navbar">
         <div class="title">GPUBeat</div>
         <div class="center">
-            <span>{{ currentTime }} &nbsp;|&nbsp; {{ refreshAgo }}秒前刷新</span>
+            <span class="clock-main">{{ currentDate }} {{ currentTime }}</span>
+                <span class="clock-sub">{{ refreshAgo }}秒前刷新</span>
             <span v-if="errorCount > 0" class="error-badge">⚠ {{ errorCount }} 台异常</span>
         </div>
         <div class="controls">
@@ -247,14 +252,16 @@
                     <template v-for="(host, hi) in filteredStats">
                         <tr class="host-separator" :style="{'--host-accent': hostColor(hi)}">
                             <td colspan="7">
-                                <div style="display:flex;align-items:center;gap:6px">
-                                    <span class="host-tag" :style="{background: hostColor(hi)}"></span>
-                                    <span class="sep-name">{{ host.hostname }}</span>
-                                    <span class="sep-status" :class="host.status">{{ host.status === 'online' ? '正常' : '异常' }}</span>
-                                    <span v-if="host.status === 'online' && host.gpus" class="sep-gpu-count">{{ host.gpus.length }} GPUs</span>
+                                <div style="display:flex;align-items:center">
+                                    <span class="sep-host-info">
+                                        <span class="host-tag" :style="{background: hostColor(hi)}"></span>
+                                        <span class="sep-name">{{ host.hostname }}</span>
+                                        <span class="sep-status" :class="host.status">{{ host.status === 'online' ? '正常' : '异常' }}</span>
+                                        <span v-if="host.status === 'online' && host.gpus" class="sep-gpu-count">{{ host.gpus.length }} GPUs</span>
+                                    </span>
                                     <template v-if="host.status === 'online' && host.sys && host.sys.cpu_usage > 0">
                                         <span class="sep-sys">CPU <strong>{{ host.sys.cpu_usage.toFixed(1) }}%</strong></span>
-                                        <span class="sep-sys">内存 <strong>{{ fmtMemMB(host.sys.mem_used) }}/{{ fmtMemMB(host.sys.mem_total) }}</strong> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.mem_percent + '%', background: host.sys.mem_percent > 85 ? '#e74c3c' : host.sys.mem_percent > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
+                                        <span class="sep-sys">内存 <span class="sys-mem-val">{{ fmtMemMB(host.sys.mem_used) }}/{{ fmtMemMB(host.sys.mem_total) }}</span> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.mem_percent + '%', background: host.sys.mem_percent > 85 ? '#e74c3c' : host.sys.mem_percent > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
                                         <span class="sep-sys">负载 <strong>{{ host.sys.load_1.toFixed(2) }} / {{ host.sys.load_5.toFixed(2) }} / {{ host.sys.load_15.toFixed(2) }}</strong></span>
                                     </template>
                                     <span v-if="host.status === 'error'" style="color:#e74c3c;margin-left:8px">{{ errorIcon(host.error) }} {{ host.error }}</span>
@@ -345,6 +352,7 @@ new Vue({
         gpustats: [],
         update_time: '',
         currentTime: '',
+        currentDate: '',
         refreshAgo: 0,
         lastFetchTime: Date.now(),
         refreshInterval: 3,
@@ -406,10 +414,14 @@ new Vue({
             var self = this;
             function tick() {
                 var now = new Date();
+                var y = now.getFullYear();
+                var mo = String(now.getMonth() + 1).padStart(2, '0');
+                var d = String(now.getDate()).padStart(2, '0');
                 var h = String(now.getHours()).padStart(2, '0');
-                var m = String(now.getMinutes()).padStart(2, '0');
+                var mi = String(now.getMinutes()).padStart(2, '0');
                 var s = String(now.getSeconds()).padStart(2, '0');
-                self.currentTime = h + ':' + m + ':' + s;
+                self.currentDate = y + '-' + mo + '-' + d;
+                self.currentTime = h + ':' + mi + ':' + s;
                 self.refreshAgo = Math.floor((Date.now() - self.lastFetchTime) / 1000);
             }
             tick();
@@ -563,13 +575,13 @@ new Vue({
                     var tc = document.getElementById('st_' + key);
                     var uc = document.getElementById('su_' + key);
                     var mc = document.getElementById('sm_' + key);
-                    if (tc) self.drawSpark(tc, hist.temp, tempColor);
-                    if (uc) self.drawSpark(uc, hist.util, utilColor);
-                    if (mc) self.drawSpark(mc, hist.mem, memColor);
+                    if (tc) self.drawSpark(tc, hist.temp, tempColor, true);
+                    if (uc) self.drawSpark(uc, hist.util, utilColor, false);
+                    if (mc) self.drawSpark(mc, hist.mem, memColor, false);
                 });
             });
         },
-        drawSpark: function(canvas, data, color) {
+        drawSpark: function(canvas, data, color, colorByValue) {
             if (!canvas) return;
             var dpr = window.devicePixelRatio || 1;
             var rect = canvas.getBoundingClientRect();
@@ -588,21 +600,50 @@ new Vue({
             var padX = 2;
             function toY(v) { return h - 4 - ((v - yMin) / (yMax - yMin)) * (h - 8); }
             function toX(i) { return padX + i * stepX; }
+
+            function valColor(v) {
+                if (!colorByValue) return color;
+                if (v >= 80) return '#e74c3c';
+                if (v >= 60) return '#f39c12';
+                if (v >= 40) return '#f1c40f';
+                return '#2ecc71';
+            }
+
+            if (colorByValue) {
+                for (var i = 0; i < vals.length - 1; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(toX(i), toY(vals[i]));
+                    ctx.lineTo(toX(i + 1), toY(vals[i + 1]));
+                    ctx.strokeStyle = valColor((vals[i] + vals[i + 1]) / 2);
+                    ctx.lineWidth = 2;
+                    ctx.lineJoin = 'round';
+                    ctx.stroke();
+                }
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(toX(0), toY(vals[0]));
+                for (var i = 1; i < vals.length; i++) {
+                    ctx.lineTo(toX(i), toY(vals[i]));
+                }
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+            }
+
             ctx.beginPath();
             ctx.moveTo(toX(0), toY(vals[0]));
             for (var i = 1; i < vals.length; i++) {
                 ctx.lineTo(toX(i), toY(vals[i]));
             }
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
-            ctx.lineJoin = 'round';
-            ctx.stroke();
             ctx.lineTo(toX(vals.length - 1), h);
             ctx.lineTo(toX(0), h);
             ctx.closePath();
+            var lastVal = vals[vals.length - 1];
+            var fillBase = colorByValue ? valColor(lastVal) : color;
             var grad = ctx.createLinearGradient(0, 0, 0, h);
-            grad.addColorStop(0, color + '40');
-            grad.addColorStop(1, color + '05');
+            grad.addColorStop(0, fillBase + '25');
+            grad.addColorStop(1, fillBase + '03');
             ctx.fillStyle = grad;
             ctx.fill();
         },
@@ -672,8 +713,8 @@ new Vue({
                     return '<b>' + params[0].name + '</b><br>' + lines.join('<br>');
                 }},
                 legend: { top: 0, textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll' },
-                grid: { left: 80, right: 20, top: 36, bottom: 40 },
-                xAxis: { type: 'category', data: users, axisLabel: { color: self.chartTextColor(), rotate: 30 } },
+                grid: { left: 80, right: 20, top: 36, bottom: 80 },
+                xAxis: { type: 'category', data: users, axisLabel: { color: self.chartTextColor(), rotate: 45, fontSize: 11, width: 80, overflow: 'truncate', ellipsis: '...' } },
                 yAxis: { type: 'value', name: 'GB', nameTextStyle: { color: self.chartTextColor() }, axisLabel: { color: self.chartTextColor() }, splitLine: { lineStyle: { color: self.chartLineColor() } } },
                 series: series
             });
@@ -742,8 +783,32 @@ new Vue({
                 return;
             }
 
+            var totalUsed = 0, totalAll = 0;
+            this.filteredStats.forEach(function(host) {
+                if (host.status !== 'online') return;
+                (host.gpus || []).forEach(function(gpu) {
+                    totalUsed += gpu['memory.used'] || 0;
+                    totalAll += gpu['memory.total'] || 0;
+                });
+            });
+            var centerUsed = Math.round(totalUsed / 1024);
+            var centerTotal = Math.round(totalAll / 1024);
+
             this.pieChart.setOption({
                 title: { show: false },
+                graphic: [{
+                    type: 'text',
+                    left: '36.5%',
+                    top: 'middle',
+                    style: {
+                        text: centerUsed + ' / ' + centerTotal + ' GB',
+                        fill: self.chartTextColor(),
+                        fontSize: 12,
+                        fontWeight: 'bold',
+                        textAlign: 'center',
+                        textVerticalAlign: 'middle'
+                    }
+                }],
                 tooltip: { trigger: 'item', formatter: function(p) {
                     if (!p.data._used && p.data._used !== 0) return null;
                     var total = p.data._total || 0;
@@ -820,8 +885,8 @@ new Vue({
                 if (users.length > 0) {
                     this.modalBarChart.setOption({
                         tooltip: { trigger: 'axis', formatter: '{b}: {c} GB' },
-                        grid: { left: 80, right: 20, top: 10, bottom: 30 },
-                        xAxis: { type: 'category', data: users, axisLabel: { color: self.chartTextColor(), rotate: 30, fontSize: 11 } },
+                        grid: { left: 80, right: 20, top: 10, bottom: 60 },
+                        xAxis: { type: 'category', data: users, axisLabel: { color: self.chartTextColor(), rotate: 45, fontSize: 11, width: 80, overflow: 'truncate', ellipsis: '...' } },
                         yAxis: { type: 'value', name: 'GB', nameTextStyle: { color: self.chartTextColor() }, axisLabel: { color: self.chartTextColor() }, splitLine: { lineStyle: { color: self.chartLineColor() } } },
                         series: [{ type: 'bar', data: values, itemStyle: { color: color, borderRadius: [4,4,0,0] } }]
                     }, true);
@@ -834,9 +899,12 @@ new Vue({
             if (pieEl) {
                 var gpuColors = ['#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#e84393', '#e74c3c'];
                 var pieData = [];
+                var mTotalUsed = 0, mTotalAll = 0;
                 (host.gpus || []).forEach(function(gpu, gi) {
                     var used = gpu['memory.used'] || 0;
                     var total = gpu['memory.total'] || 0;
+                    mTotalUsed += used;
+                    mTotalAll += total;
                     var c = gpuColors[gi % gpuColors.length];
                     pieData.push({
                         name: 'GPU ' + gpu.index + ' 已用',
@@ -855,6 +923,19 @@ new Vue({
                 if (this.modalPieChart) { this.modalPieChart.dispose(); this.modalPieChart = null; }
                 this.modalPieChart = echarts.init(pieEl);
                 this.modalPieChart.setOption({
+                    graphic: [{
+                        type: 'text',
+                        left: '36.5%',
+                        top: 'middle',
+                        style: {
+                            text: Math.round(mTotalUsed / 1024) + ' / ' + Math.round(mTotalAll / 1024) + ' GB',
+                            fill: self.chartTextColor(),
+                            fontSize: 12,
+                            fontWeight: 'bold',
+                            textAlign: 'center',
+                            textVerticalAlign: 'middle'
+                        }
+                    }],
                     tooltip: { trigger: 'item', formatter: function(p) {
                         if (p.name.indexOf('空闲') !== -1) return p.name + ': ' + p.value + ' MiB';
                         return '<b>' + p.name + '</b><br>' + p.value + ' MiB (' + p.percent.toFixed(1) + '%)';
