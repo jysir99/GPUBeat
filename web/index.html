@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GPU Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #2c3e50; color: #ecf0f1; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+        /* Navbar */
+        .navbar { background: #1a252f; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 10px rgba(0,0,0,0.3); position: sticky; top: 0; z-index: 100; }
+        .navbar .title { font-size: 20px; font-weight: 700; color: #fff; }
+        .navbar .time { color: #bdc3c7; font-size: 14px; }
+        .navbar .controls { display: flex; align-items: center; gap: 10px; }
+        .navbar .controls input { width: 50px; padding: 4px 8px; border-radius: 4px; border: 1px solid #555; background: #34495e; color: #fff; text-align: center; }
+        .navbar .controls button { padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; background: #27ae60; color: #fff; font-size: 13px; transition: background 0.2s; }
+        .navbar .controls button:hover { background: #2ecc71; }
+        .error-badge { background: #e67e22; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+
+        /* Cards Grid */
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; padding: 20px 24px; }
+        .gpu-card { border-radius: 8px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.2s; }
+        .gpu-card:hover { transform: translateY(-2px); }
+        .gpu-card.blue { background: linear-gradient(135deg, #007bff, #0056b3); }
+        .gpu-card.yellow { background: linear-gradient(135deg, #ffc107, #d4a005); color: #333; }
+        .gpu-card.red { background: linear-gradient(135deg, #dc3545, #a71d2a); }
+        .gpu-card .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .gpu-card .hostname { font-size: 13px; opacity: 0.9; }
+        .gpu-card .gpu-name { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+        .gpu-card .metrics { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+        .gpu-card .metric { text-align: center; flex: 1; min-width: 60px; }
+        .gpu-card .metric .value { font-size: 22px; font-weight: 700; }
+        .gpu-card .metric .label { font-size: 11px; opacity: 0.8; text-transform: uppercase; }
+        .gpu-card .users { margin-top: 10px; font-size: 12px; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Error Card */
+        .gpu-card.error-card { background: #3a1c1c; border: 2px solid #dc3545; }
+        .error-card .error-icon { font-size: 24px; margin-bottom: 6px; }
+        .error-card .error-host { font-weight: 700; font-size: 15px; }
+        .error-card .error-ip { color: #bdc3c7; font-size: 12px; margin-bottom: 8px; }
+        .error-card .error-msg { color: #e74c3c; font-size: 13px; word-break: break-all; }
+        .error-card .error-retry { color: #95a5a6; font-size: 11px; margin-top: 8px; }
+
+        /* Table */
+        .table-section { padding: 20px 24px; }
+        .table-section h2 { font-size: 18px; margin-bottom: 12px; color: #ecf0f1; }
+        .table-wrapper { overflow-x: auto; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        table { width: 100%; border-collapse: collapse; background: #34495e; }
+        thead { background: #1a252f; }
+        th { padding: 10px 12px; text-align: left; font-size: 13px; color: #bdc3c7; white-space: nowrap; }
+        td { padding: 8px 12px; font-size: 13px; border-top: 1px solid #2c3e50; }
+        tr:hover td { background: rgba(255,255,255,0.05); }
+        .mem-high { color: #e74c3c; font-weight: 600; }
+        .mem-mid { color: #17a2b8; }
+        .mem-low { color: #ecf0f1; }
+        tr.error-row td { background: rgba(220,53,69,0.15); color: #e74c3c; }
+        .error-row-icon { margin-right: 4px; }
+
+        /* Charts */
+        .charts-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px 24px; }
+        .chart-container { background: #34495e; border-radius: 8px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        .chart-container h3 { font-size: 15px; margin-bottom: 12px; color: #ecf0f1; }
+        .chart-box { height: 320px; }
+
+        /* Footer */
+        .footer { text-align: center; padding: 16px; color: #7f8c8d; font-size: 12px; border-top: 1px solid #34495e; }
+        .footer a { color: #3498db; text-decoration: none; }
+
+        /* Empty State */
+        .empty-state { text-align: center; padding: 60px 20px; color: #7f8c8d; }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+
+        @media (max-width: 768px) {
+            .charts-section { grid-template-columns: 1fr; }
+            .navbar { flex-wrap: wrap; gap: 8px; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <!-- Navbar -->
+    <div class="navbar">
+        <div class="title">GPU Dashboard</div>
+        <div class="time">
+            {{ update_time || '加载中...' }}
+            <span v-if="errorCount > 0" class="error-badge">
+                ⚠ {{ errorCount }} 台服务器异常
+            </span>
+        </div>
+        <div class="controls">
+            <span style="font-size:13px;color:#bdc3c7">刷新间隔</span>
+            <input type="number" v-model.number="refreshInterval" min="1" max="60"> 秒
+            <button @click="fetchData">刷新</button>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-if="gpustats.length === 0 && !update_time" class="empty-state">
+        <div class="icon">🖥️</div>
+        <p>等待数据加载...</p>
+    </div>
+
+    <!-- GPU Cards -->
+    <div class="cards-grid">
+        <template v-for="host in gpustats">
+            <!-- Error Card -->
+            <div v-if="host.status === 'error'" class="gpu-card error-card">
+                <div class="error-icon">{{ errorIcon(host.error) }}</div>
+                <div class="error-host">{{ host.hostname }}</div>
+                <div class="error-ip">{{ host.host }}</div>
+                <div class="error-msg">{{ host.error }}</div>
+                <div class="error-retry">将在下次刷新时重试</div>
+            </div>
+            <!-- Normal GPU Cards -->
+            <div v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index"
+                 class="gpu-card" :class="cardColor(gpu)">
+                <div class="card-header">
+                    <span class="hostname">{{ host.hostname }}</span>
+                    <span>[{{ gpu.index }}]</span>
+                </div>
+                <div class="gpu-name">{{ gpu.name || '-' }}</div>
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="value">{{ gpu['temperature.gpu'] || 0 }}°</div>
+                        <div class="label">温度</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">{{ gpu.memory || 0 }}%</div>
+                        <div class="label">显存</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">{{ gpu['utilization.gpu'] || 0 }}%</div>
+                        <div class="label">利用率</div>
+                    </div>
+                </div>
+                <div class="users" v-if="gpu.user_processes && gpu.user_processes !== '-'">
+                    👤 {{ gpu.user_processes }}
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Table -->
+    <div class="table-section" v-if="gpustats.length > 0">
+        <h2>All Hosts and GPUs</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Host</th>
+                        <th>GPU</th>
+                        <th>Temp.</th>
+                        <th>Util.</th>
+                        <th>Memory Use/Cap</th>
+                        <th>Available</th>
+                        <th>Power Use/Cap</th>
+                        <th>User Processes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template v-for="host in gpustats">
+                        <!-- Error Row -->
+                        <tr v-if="host.status === 'error'" class="error-row">
+                            <td>{{ host.hostname }}</td>
+                            <td colspan="7">
+                                <span class="error-row-icon">{{ errorIcon(host.error) }}</span>
+                                {{ host.error }}
+                            </td>
+                        </tr>
+                        <!-- Normal Rows -->
+                        <tr v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index">
+                            <td>{{ host.hostname }}</td>
+                            <td>[{{ gpu.index }}] {{ gpu.name }}</td>
+                            <td>{{ gpu['temperature.gpu'] || '-' }}℃</td>
+                            <td>{{ gpu['utilization.gpu'] || '-' }}%</td>
+                            <td :class="memClass(gpu.memory)">
+                                {{ gpu.memory || '-' }}% ({{ gpu['memory.used'] || 0 }}/{{ gpu['memory.total'] || '-' }})
+                            </td>
+                            <td>{{ (gpu['memory.total'] - gpu['memory.used']).toFixed(0) }}</td>
+                            <td>{{ gpu['power.draw'] || '-' }} / {{ gpu['enforced.power.limit'] || '-' }}</td>
+                            <td>{{ gpu.user_processes || '-' }}</td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-section" v-if="totalGPUs > 0">
+        <div class="chart-container">
+            <h3>显存使用排行</h3>
+            <div class="chart-box" id="barChart"></div>
+        </div>
+        <div class="chart-container">
+            <h3>显卡显存占比</h3>
+            <div class="chart-box" id="pieChart"></div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        {{ update_time }} &nbsp;|&nbsp;
+        GPU Dashboard &copy; 2025 &nbsp;|&nbsp;
+        SSH based GPU Monitor
+    </div>
+</div>
+
+<script>
+new Vue({
+    el: '#app',
+    data: {
+        gpustats: [],
+        update_time: '',
+        refreshInterval: 3,
+        timer: null,
+        barChart: null,
+        pieChart: null
+    },
+    computed: {
+        errorCount: function() {
+            return this.gpustats.filter(function(h) { return h.status === 'error'; }).length;
+        },
+        totalGPUs: function() {
+            var count = 0;
+            this.gpustats.forEach(function(h) {
+                if (h.gpus) count += h.gpus.length;
+            });
+            return count;
+        }
+    },
+    mounted: function() {
+        this.fetchData();
+        this.startAutoRefresh();
+    },
+    beforeDestroy: function() {
+        this.stopAutoRefresh();
+    },
+    methods: {
+        fetchData: function() {
+            var self = this;
+            fetch('/api/gpustats')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    self.gpustats = data.gpustats || [];
+                    self.update_time = data.update_time || '';
+                    self.$nextTick(function() { self.updateCharts(); });
+                })
+                .catch(function(err) { console.error('Fetch error:', err); });
+        },
+        startAutoRefresh: function() {
+            this.stopAutoRefresh();
+            var self = this;
+            this.timer = setInterval(function() { self.fetchData(); }, self.refreshInterval * 1000);
+        },
+        stopAutoRefresh: function() {
+            if (this.timer) { clearInterval(this.timer); this.timer = null; }
+        },
+        cardColor: function(gpu) {
+            var t = gpu['temperature.gpu'] || 0;
+            if (t > 70) return 'red';
+            if (t > 40) return 'yellow';
+            return 'blue';
+        },
+        memClass: function(pct) {
+            if (pct > 70) return 'mem-high';
+            if (pct > 30) return 'mem-mid';
+            return 'mem-low';
+        },
+        errorIcon: function(err) {
+            if (!err) return '⚠';
+            if (err.indexOf('SSH连接失败') === 0) return '🔌';
+            if (err.indexOf('SSH认证失败') === 0) return '🔑';
+            if (err.indexOf('nvidia-smi未安装') === 0) return '⚙';
+            if (err.indexOf('nvidia-smi执行失败') === 0) return '💻';
+            if (err.indexOf('数据解析异常') === 0) return '📊';
+            return '⚠';
+        },
+        updateCharts: function() {
+            this.updateBarChart();
+            this.updatePieChart();
+        },
+        updateBarChart: function() {
+            var userMem = {};
+            this.gpustats.forEach(function(host) {
+                if (host.status === 'error') return;
+                (host.gpus || []).forEach(function(gpu) {
+                    (gpu.processes || []).forEach(function(proc) {
+                        var u = proc.username || 'unknown';
+                        userMem[u] = (userMem[u] || 0) + proc.gpu_memory_usage;
+                    });
+                });
+            });
+
+            var users = Object.keys(userMem).sort(function(a, b) { return userMem[b] - userMem[a]; });
+            var values = users.map(function(u) { return (userMem[u] / 1024).toFixed(2); });
+
+            if (!this.barChart) {
+                this.barChart = echarts.init(document.getElementById('barChart'));
+            }
+            this.barChart.setOption({
+                tooltip: { trigger: 'axis', formatter: '{b}: {c} GB' },
+                grid: { left: 80, right: 20, top: 10, bottom: 40 },
+                xAxis: { type: 'category', data: users, axisLabel: { color: '#bdc3c7', rotate: 30 } },
+                yAxis: { type: 'value', name: 'GB', nameTextStyle: { color: '#bdc3c7' }, axisLabel: { color: '#bdc3c7' }, splitLine: { lineStyle: { color: '#4a6278' } } },
+                series: [{ type: 'bar', data: values, itemStyle: { color: '#3498db', borderRadius: [4,4,0,0] } }]
+            });
+        },
+        updatePieChart: function() {
+            var pieData = [];
+            var self = this;
+            this.gpustats.forEach(function(host) {
+                if (host.status === 'error') return;
+                (host.gpus || []).forEach(function(gpu) {
+                    pieData.push({
+                        name: host.hostname + ' [' + gpu.index + ']',
+                        value: gpu['memory.used'] || 0
+                    });
+                });
+            });
+
+            if (!this.pieChart) {
+                this.pieChart = echarts.init(document.getElementById('pieChart'));
+            }
+            this.pieChart.setOption({
+                tooltip: { trigger: 'item', formatter: '{b}: {c} MiB ({d}%)' },
+                legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: '#bdc3c7', fontSize: 11 } },
+                series: [{
+                    type: 'pie',
+                    radius: ['35%', '65%'],
+                    center: ['40%', '50%'],
+                    label: { color: '#bdc3c7', fontSize: 11, formatter: '{b}\n{d}%' },
+                    data: pieData
+                }]
+            });
+        }
+    },
+    watch: {
+        refreshInterval: function() { this.startAutoRefresh(); }
+    }
+});
+</script>
+</body>
+</html>

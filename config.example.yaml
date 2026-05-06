@@ -1,0 +1,17 @@
+server:
+  host: "0.0.0.0"
+  port: 9988
+  refresh: 3
+
+hosts:
+  - name: "gpu-server-1"
+    host: "192.168.1.100"
+    port: 22
+    username: "root"
+    password: "your-password"
+
+  # - name: "gpu-server-2"
+  #   host: "192.168.1.101"
+  #   port: 22
+  #   username: "user"
+  #   password: "password"
