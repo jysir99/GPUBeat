@@ -22,10 +22,10 @@ func getExeDir() string {
 	return filepath.Dir(exe)
 }
 
-func fetchHost(hostCfg HostConfig, idx int, wg *sync.WaitGroup, results chan<- *HostGPUData) {
+func fetchHost(pool *SSHPool, hostCfg HostConfig, idx int, wg *sync.WaitGroup, results chan<- *HostGPUData) {
 	defer wg.Done()
 	start := time.Now()
-	output, err := ExecuteCommand(hostCfg.Host, hostCfg.Port, hostCfg.Username, hostCfg.Password, nvidiaSMICmd)
+	output, err := pool.ExecuteCommand(hostCfg.Host, hostCfg.Port, hostCfg.Username, hostCfg.Password, nvidiaSMICmd)
 	elapsed := time.Since(start)
 	if err != nil {
 		log.Printf("[刷新] %s (%s) 失败 %v: %s", hostCfg.Name, hostCfg.Host, elapsed, err)
@@ -45,7 +45,7 @@ func fetchHost(hostCfg HostConfig, idx int, wg *sync.WaitGroup, results chan<- *
 	results <- data
 }
 
-func backgroundRefresh(cfg *Config, logger *Logger) {
+func backgroundRefresh(cfg *Config, logger *Logger, pool *SSHPool) {
 	for {
 		start := time.Now()
 		var wg sync.WaitGroup
@@ -53,7 +53,7 @@ func backgroundRefresh(cfg *Config, logger *Logger) {
 
 		for i, hostCfg := range cfg.Hosts {
 			wg.Add(1)
-			go fetchHost(hostCfg, i, &wg, results)
+			go fetchHost(pool, hostCfg, i, &wg, results)
 		}
 
 		wg.Wait()
@@ -111,7 +111,10 @@ func main() {
 		}
 	}()
 
-	go backgroundRefresh(cfg, logger)
+	pool := NewSSHPool()
+	defer pool.Close()
+
+	go backgroundRefresh(cfg, logger, pool)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", loggingMiddleware(handleIndex))

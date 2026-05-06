@@ -1,4 +1,4 @@
-BINARY = gpuview
+BINARY = gpubeat
 DIST   = dist
 BUILD  = $(DIST)/$(BINARY)
 
