@@ -45,6 +45,7 @@ GPUBeat 通过 SSH 连接远程服务器执行 `nvidia-smi`，将多台 GPU 服�
 |           暗色模式           |
 | :--------------------------: |
 | ![dark](screenshot/dark.png) |
+| ![dark](screenshot/dark-2.png) |
 
 ### 🚀 快速开始
 
@@ -187,6 +188,8 @@ GPUBeat is a lightweight GPU cluster monitoring dashboard that connects to remot
 |           Dark Mode           |
 | :--------------------------: |
 | ![dark](screenshot/dark.png) |
+| ![dark](screenshot/dark-2.png) |
+
 
 ### 🚀 Quick Start
 
