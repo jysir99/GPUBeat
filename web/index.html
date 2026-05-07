@@ -57,7 +57,9 @@
         body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; transition: background 0.3s, color 0.3s; }
 
         .navbar { background: var(--bg-nav); padding: 10px 24px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; box-shadow: 0 2px 10px var(--shadow); position: sticky; top: 0; z-index: 100; transition: background 0.3s; }
-        .navbar .title { font-size: 20px; font-weight: 700; color: var(--text-nav-title); white-space: nowrap; }
+        .navbar .title { font-size: 20px; font-weight: 700; color: var(--text-nav-title); white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+        .progress-ring { width: 18px; height: 18px; transform: rotate(-90deg); flex-shrink: 0; }
+        .progress-ring__circle { stroke: var(--progress-bar); fill: none; }
         .navbar .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; color: var(--text-nav); }
         .clock-main { font-size: 15px; font-weight: 600; letter-spacing: 1px; }
         .clock-sub { font-size: 11px; opacity: 0.6; margin-top: 1px; }
@@ -71,9 +73,7 @@
         .theme-btn { background: var(--bg-nav-btn) !important; border: 1px solid var(--border-nav-btn) !important; color: var(--text-nav) !important; font-size: 16px !important; padding: 3px 8px !important; }
         .theme-btn:hover { opacity: 0.8; }
 
-        /* Progress bar */
-        .progress-track { height: 2px; background: var(--progress-track); position: sticky; top: 40px; z-index: 99; }
-        .progress-fill { height: 100%; background: var(--progress-bar); width: 0%; will-change: width; }
+        /* Progress ring integrated into navbar title */
 
         /* Cards */
         .cards-section { padding: 16px 0 0; }
@@ -171,7 +171,7 @@
 <body>
 <div id="app">
     <div class="navbar">
-        <div class="title">GPUBeat</div>
+        <div class="title">GPUBeat<svg class="progress-ring" viewBox="0 0 18 18"><circle class="progress-ring__bg" cx="9" cy="9" r="7" stroke="var(--progress-track)" stroke-width="2" fill="none"/><circle class="progress-ring__circle" ref="progressRing" cx="9" cy="9" r="7" stroke-width="2" stroke-dasharray="43.98" stroke-dashoffset="43.98" stroke-linecap="round"/></svg></div>
         <div class="center">
             <span class="clock-main">{{ currentDate }} {{ currentTime }}</span>
                 <span class="clock-sub">{{ refreshAgo }}秒前刷新</span>
@@ -188,7 +188,6 @@
             <button class="theme-btn" @click="toggleTheme">{{ theme === 'dark' ? '☀' : '🌙' }}</button>
         </div>
     </div>
-    <div class="progress-track"><div class="progress-fill" ref="progressBar"></div></div>
 
     <div v-if="filteredStats.length === 0 && !update_time" class="empty-state">
         <div class="icon">🖥️</div>
@@ -434,8 +433,8 @@ new Vue({
             var self = this;
             this.stopProgress();
             this.progress = 0;
-            if (self.$refs.progressBar) {
-                self.$refs.progressBar.style.width = '0%';
+            if (self.$refs.progressRing) {
+                self.$refs.progressRing.style.strokeDashoffset = '43.98';
             }
             requestAnimationFrame(function() {
                 self.startProgress();
@@ -457,7 +456,8 @@ new Vue({
         startProgress: function() {
             this.stopProgress();
             var self = this;
-            var bar = this.$refs.progressBar;
+            var ring = this.$refs.progressRing;
+            var circumference = 43.98;
             var startTime = null;
             var duration = self.refreshInterval * 1000;
             function tick(ts) {
@@ -465,7 +465,7 @@ new Vue({
                 var elapsed = ts - startTime;
                 var pct = Math.min(100, (elapsed / duration) * 100);
                 self.progress = pct;
-                if (bar) bar.style.width = pct + '%';
+                if (ring) ring.style.strokeDashoffset = circumference * (1 - pct / 100);
                 if (elapsed < duration) {
                     self.progressTimer = requestAnimationFrame(tick);
                 }
