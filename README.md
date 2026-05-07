@@ -37,9 +37,14 @@ GPUBeat 通过 SSH 连接远程服务器执行 `nvidia-smi`，将多台 GPU 服�
 
 ### 📸 截图
 
-| 亮色模式 | 亮色模式（详情） | 暗色模式 |
-|:---:|:---:|:---:|
-| ![light](screenshot/light.png) | ![light-2](screenshot/light-2.png) | ![dark](screenshot/dark.png) |
+|              亮色模式              |
+| :--------------------------------: |
+|   ![light](screenshot/light.png)   |
+| ![light-2](screenshot/light-2.png) |
+
+|           暗色模式           |
+| :--------------------------: |
+| ![dark](screenshot/dark.png) |
 
 ### 🚀 快速开始
 
@@ -47,13 +52,13 @@ GPUBeat 通过 SSH 连接远程服务器执行 `nvidia-smi`，将多台 GPU 服�
 
 从 [Releases](https://github.com/jysir99/GPUBeat/releases) 下载对应平台的二进制文件：
 
-| 平台 | 文件 |
-|---|---|
-| Linux x86_64 | `gpubeat-linux-amd64` |
-| Linux ARM64 | `gpubeat-linux-arm64` |
-| Windows x86_64 | `gpubeat-windows-amd64.exe` |
-| macOS Intel | `gpubeat-darwin-amd64` |
-| macOS Apple Silicon | `gpubeat-darwin-arm64` |
+| 平台                | 文件                        |
+| ------------------- | --------------------------- |
+| Linux x86_64        | `gpubeat-linux-amd64`       |
+| Linux ARM64         | `gpubeat-linux-arm64`       |
+| Windows x86_64      | `gpubeat-windows-amd64.exe` |
+| macOS Intel         | `gpubeat-darwin-amd64`      |
+| macOS Apple Silicon | `gpubeat-darwin-arm64`      |
 
 #### 从源码编译
 
@@ -73,9 +78,9 @@ cp config.example.yaml config.yaml
 
 ```yaml
 server:
-  host: "0.0.0.0"    # 监听地址
-  port: 9988          # 监听端口
-  refresh: 3          # 刷新间隔（秒）
+  host: "0.0.0.0" # 监听地址
+  port: 9988 # 监听端口
+  refresh: 3 # 刷新间隔（秒）
 
 hosts:
   - name: "gpu-server-1"
@@ -136,11 +141,11 @@ Windows 下双击 `gpubeat.exe` 或在命令行运行即可。
 
 ### 🛠️ 技术栈
 
-| 层 | 技术 |
-|---|---|
+| 层   | 技术                          |
+| ---- | ----------------------------- |
 | 后端 | Go 1.23, crypto/ssh, go:embed |
-| 前端 | Vue 2, ECharts, 原生 CSS |
-| 部署 | 单二进制, 跨平台交叉编译 |
+| 前端 | Vue 2, ECharts, 原生 CSS      |
+| 部署 | 单二进制, 跨平台交叉编译      |
 
 ### 🤝 参与贡献
 
@@ -174,9 +179,14 @@ GPUBeat is a lightweight GPU cluster monitoring dashboard that connects to remot
 
 ### 📸 Screenshots
 
-| Light Mode | Light Mode (Detail) | Dark Mode |
-|:---:|:---:|:---:|
-| ![light](screenshot/light.png) | ![light-2](screenshot/light-2.png) | ![dark](screenshot/dark.png) |
+|              Light Mode              |
+| :--------------------------------: |
+|   ![light](screenshot/light.png)   |
+| ![light-2](screenshot/light-2.png) |
+
+|           Dark Mode           |
+| :--------------------------: |
+| ![dark](screenshot/dark.png) |
 
 ### 🚀 Quick Start
 
@@ -184,13 +194,13 @@ GPUBeat is a lightweight GPU cluster monitoring dashboard that connects to remot
 
 Grab the binary for your platform from [Releases](https://github.com/jysir99/GPUBeat/releases):
 
-| Platform | File |
-|---|---|
-| Linux x86_64 | `gpubeat-linux-amd64` |
-| Linux ARM64 | `gpubeat-linux-arm64` |
-| Windows x86_64 | `gpubeat-windows-amd64.exe` |
-| macOS Intel | `gpubeat-darwin-amd64` |
-| macOS Apple Silicon | `gpubeat-darwin-arm64` |
+| Platform            | File                        |
+| ------------------- | --------------------------- |
+| Linux x86_64        | `gpubeat-linux-amd64`       |
+| Linux ARM64         | `gpubeat-linux-arm64`       |
+| Windows x86_64      | `gpubeat-windows-amd64.exe` |
+| macOS Intel         | `gpubeat-darwin-amd64`      |
+| macOS Apple Silicon | `gpubeat-darwin-arm64`      |
 
 #### Build from Source
 
@@ -210,9 +220,9 @@ Edit `config.yaml` with your server SSH credentials:
 
 ```yaml
 server:
-  host: "0.0.0.0"    # listen address
-  port: 9988          # listen port
-  refresh: 3          # refresh interval in seconds
+  host: "0.0.0.0" # listen address
+  port: 9988 # listen port
+  refresh: 3 # refresh interval in seconds
 
 hosts:
   - name: "gpu-server-1"
@@ -250,11 +260,11 @@ Open your browser and visit `http://localhost:9988` 🎉
 
 ### 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Backend | Go 1.23, crypto/ssh, go:embed |
-| Frontend | Vue 2, ECharts, Vanilla CSS |
-| Deploy | Single binary, cross-platform compilation |
+| Layer    | Technology                                |
+| -------- | ----------------------------------------- |
+| Backend  | Go 1.23, crypto/ssh, go:embed             |
+| Frontend | Vue 2, ECharts, Vanilla CSS               |
+| Deploy   | Single binary, cross-platform compilation |
 
 ### 🤝 Contributing
 
