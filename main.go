@@ -100,14 +100,24 @@ func main() {
 	log.Printf("配置加载成功: %d 台服务器, 端口 %d, 刷新间隔 %ds",
 		len(cfg.Hosts), cfg.Server.Port, cfg.Server.Refresh)
 
-	logger, err := NewLogger(filepath.Join(getExeDir(), "log"))
+	logger, err := NewLogger(filepath.Join(getExeDir(), "log", "host"))
 	if err != nil {
-		log.Printf("日志系统初始化失败: %v, 继续运行", err)
+		log.Printf("主机日志初始化失败: %v, 继续运行", err)
 		logger = nil
 	}
+
+	accessLogger, err := NewLogger(filepath.Join(getExeDir(), "log", "access"))
+	if err != nil {
+		log.Printf("访问日志初始化失败: %v, 继续运行", err)
+		accessLogger = nil
+	}
+
 	defer func() {
 		if logger != nil {
 			logger.Close()
+		}
+		if accessLogger != nil {
+			accessLogger.Close()
 		}
 	}()
 
@@ -117,8 +127,8 @@ func main() {
 	go backgroundRefresh(cfg, logger, pool)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", loggingMiddleware(handleIndex))
-	mux.HandleFunc("/api/gpustats", loggingMiddleware(handleGPUStats))
+	mux.HandleFunc("/", loggingMiddleware(handleIndex, accessLogger))
+	mux.HandleFunc("/api/gpustats", loggingMiddleware(handleGPUStats, accessLogger))
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("GPU Dashboard 启动: http://%s", addr)

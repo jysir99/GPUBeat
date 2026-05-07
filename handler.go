@@ -57,10 +57,25 @@ func handleGPUStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(data)
 }
 
-func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
+type responseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.status = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func loggingMiddleware(next http.HandlerFunc, accessLogger *Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		next(w, r)
-		log.Printf("[HTTP] %s %s %s %v", r.Method, r.URL.Path, r.RemoteAddr, time.Since(start))
+		rw := &responseWriter{ResponseWriter: w, status: 200}
+		next(rw, r)
+		duration := time.Since(start)
+		log.Printf("[HTTP] %s %s %s %d %v", r.Method, r.URL.Path, r.RemoteAddr, rw.status, duration)
+		if accessLogger != nil {
+			accessLogger.LogAccess(r.Method, r.URL.Path, r.RemoteAddr, rw.status, duration)
+		}
 	}
 }

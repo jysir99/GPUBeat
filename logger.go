@@ -73,6 +73,19 @@ func (l *Logger) LogHost(data *HostGPUData) {
 	f.Sync()
 }
 
+func (l *Logger) LogAccess(method, path, remoteAddr string, status int, duration time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	ts := time.Now().Format("2006-01-02 15:04:05")
+	f, err := l.getFile("access")
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(f, "[%s] %s %s %s %d %s\n", ts, method, path, remoteAddr, status, duration)
+	f.Sync()
+}
+
 func (l *Logger) Close() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
