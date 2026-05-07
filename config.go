@@ -16,6 +16,7 @@ type ServerConfig struct {
 	Host    string `yaml:"host"`
 	Port    int    `yaml:"port"`
 	Refresh int    `yaml:"refresh"`
+	Privacy bool   `yaml:"privacy"`
 }
 
 type HostConfig struct {

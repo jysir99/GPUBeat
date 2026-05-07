@@ -40,12 +40,10 @@ GPUBeat 通过 SSH 连接远程服务器执行 `nvidia-smi`，将多台 GPU 服�
 |              亮色模式              |
 | :--------------------------------: |
 |   ![light](screenshot/light.png)   |
-| ![light-2](screenshot/light-2.png) |
 
 |           暗色模式           |
 | :--------------------------: |
 | ![dark](screenshot/dark.png) |
-| ![dark](screenshot/dark-2.png) |
 
 ### 🚀 快速开始
 
@@ -82,6 +80,7 @@ server:
   host: "0.0.0.0" # 监听地址
   port: 9988 # 监听端口
   refresh: 3 # 刷新间隔（秒）
+  privacy: false # 隐私模式：将实际用户名替换为 user1, user2 等
 
 hosts:
   - name: "gpu-server-1"
@@ -103,6 +102,8 @@ hosts:
 chmod +x gpubeat         # Linux/macOS
 ./gpubeat                # 读取同目录 config.yaml
 ./gpubeat -c /path/to.yaml  # 指定配置路径
+./gpubeat -privacy       # 启用隐私模式
+./gpubeat -h             # 显示帮助信息
 ```
 
 Windows 下双击 `gpubeat.exe` 或在命令行运行即可。
@@ -183,12 +184,10 @@ GPUBeat is a lightweight GPU cluster monitoring dashboard that connects to remot
 |              Light Mode              |
 | :--------------------------------: |
 |   ![light](screenshot/light.png)   |
-| ![light-2](screenshot/light-2.png) |
 
 |           Dark Mode           |
 | :--------------------------: |
 | ![dark](screenshot/dark.png) |
-| ![dark](screenshot/dark-2.png) |
 
 
 ### 🚀 Quick Start
@@ -226,6 +225,7 @@ server:
   host: "0.0.0.0" # listen address
   port: 9988 # listen port
   refresh: 3 # refresh interval in seconds
+  privacy: false # privacy mode: replace real usernames with user1, user2, etc.
 
 hosts:
   - name: "gpu-server-1"
@@ -241,6 +241,8 @@ hosts:
 chmod +x gpubeat             # Linux/macOS
 ./gpubeat                    # reads config.yaml from same directory
 ./gpubeat -c /path/to.yaml   # specify config path
+./gpubeat -privacy           # enable privacy mode
+./gpubeat -h                 # show help
 ```
 
 On Windows, simply double-click `gpubeat.exe` or run it from Command Prompt.

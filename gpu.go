@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type GPUInfo struct {
@@ -242,4 +243,39 @@ func safeFloat(s string) float64 {
 
 func roundToOne(v float64) float64 {
 	return float64(int(v+0.5)) / 1
+}
+
+var (
+	usernameMap     = make(map[string]string)
+	usernameCounter int
+	usernameMu      sync.Mutex
+)
+
+func anonymizeUsername(name string) string {
+	if name == "" || name == "unknown" || name == "-" {
+		return name
+	}
+	if mapped, ok := usernameMap[name]; ok {
+		return mapped
+	}
+	usernameCounter++
+	mapped := fmt.Sprintf("user%d", usernameCounter)
+	usernameMap[name] = mapped
+	return mapped
+}
+
+func AnonymizeHostData(data *HostGPUData) {
+	for i := range data.GPUs {
+		gpu := &data.GPUs[i]
+		for j := range gpu.Processes {
+			gpu.Processes[j].Username = anonymizeUsername(gpu.Processes[j].Username)
+		}
+		if gpu.UserProcesses != "-" && gpu.UserProcesses != "" {
+			users := strings.Split(gpu.UserProcesses, ", ")
+			for k, u := range users {
+				users[k] = anonymizeUsername(strings.TrimSpace(u))
+			}
+			gpu.UserProcesses = strings.Join(users, ", ")
+		}
+	}
 }

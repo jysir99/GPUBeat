@@ -1,4 +1,4 @@
-module gpuview
+module gpubeat
 
 go 1.26.2
 

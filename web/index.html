@@ -44,14 +44,14 @@
             --border-color: #dfe6e9;
             --border-light: #f0f0f0;
             --hover-bg: rgba(0,0,0,0.03);
-            --shadow: rgba(0,0,0,0.08);
+            --shadow: rgba(0,0,0,0.25);
             --table-header: #f8f9fa;
             --error-bg: rgba(220,53,69,0.08);
             --chart-bg: #ffffff;
             --modal-bg: #ffffff;
             --split-color: #dfe6e9;
             --progress-bar: #27ae60;
-            --progress-track: rgba(0,0,0,0.06);
+            --progress-track: rgba(0,0,0,0.2);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; transition: background 0.3s, color 0.3s; overflow-x: hidden; }
@@ -518,11 +518,12 @@ new Vue({
             this.theme = this.theme === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', this.theme);
             localStorage.setItem('gpu-theme', this.theme);
+            this.barHash = '';
+            this.pieHash = '';
             var self = this;
-            setTimeout(function() {
-                if (self.barChart) self.barChart.resize();
-                if (self.pieChart) self.pieChart.resize();
-            }, 50);
+            this.$nextTick(function() {
+                setTimeout(function() { self.updateCharts(); }, 50);
+            });
         },
         hostColor: function(index) { return HOST_COLORS[index % HOST_COLORS.length]; },
         hostColorByName: function(hostname) {
@@ -862,7 +863,7 @@ new Vue({
                     labelLine: { length: 18, length2: 30, smooth: true },
                     labelLayout: { hideOverlap: true },
                     emphasis: { label: { fontSize: 12, fontWeight: 'bold' } },
-                    itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.08)', borderWidth: 2 },
+                    itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.25)', borderWidth: 2 },
                     data: innerData
                 }, {
                     type: 'pie',
@@ -872,7 +873,7 @@ new Vue({
                     label: { show: false },
                     labelLine: { show: false },
                     tooltip: { show: false },
-                    itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.06)', borderWidth: 2 },
+                    itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.2)', borderWidth: 2 },
                     data: outerData
                 }]
             });
@@ -928,27 +929,43 @@ new Vue({
             var pieEl = document.getElementById('modalPieChart');
             if (pieEl) {
                 var gpuColors = ['#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#e84393', '#e74c3c'];
-                var pieData = [];
+                var innerData = [];
+                var outerData = [];
+                var legendNames = [];
                 var mTotalUsed = 0, mTotalAll = 0;
                 (host.gpus || []).forEach(function(gpu, gi) {
                     var used = gpu['memory.used'] || 0;
                     var total = gpu['memory.total'] || 0;
+                    var free = total - used;
                     mTotalUsed += used;
                     mTotalAll += total;
                     var c = gpuColors[gi % gpuColors.length];
-                    pieData.push({
-                        name: 'GPU ' + gpu.index + ' 已用',
+                    var name = 'GPU ' + gpu.index;
+                    legendNames.push(name);
+
+                    innerData.push({
+                        name: name,
                         value: used,
-                        itemStyle: { color: c }
+                        itemStyle: { color: c },
+                        _total: total,
+                        _used: used
                     });
-                    if (total > used) {
-                        pieData.push({
-                            name: 'GPU ' + gpu.index + ' 空闲',
-                            value: total - used,
-                            itemStyle: { color: c, opacity: 0.2 },
-                            label: { show: false }
+                    if (free > 0) {
+                        innerData.push({
+                            name: name + '_free',
+                            value: free,
+                            itemStyle: { color: c, opacity: 0.08 },
+                            label: { show: false },
+                            labelLine: { show: false },
+                            emphasis: { disabled: true },
+                            tooltip: { show: false }
                         });
                     }
+                    outerData.push({
+                        name: name,
+                        value: total,
+                        itemStyle: { color: c, opacity: 0.3 }
+                    });
                 });
                 if (this.modalPieChart) { this.modalPieChart.dispose(); this.modalPieChart = null; }
                 this.modalPieChart = echarts.init(pieEl);
@@ -967,18 +984,35 @@ new Vue({
                         }
                     }],
                     tooltip: { trigger: 'item', formatter: function(p) {
-                        if (p.name.indexOf('空闲') !== -1) return p.name + ': ' + p.value + ' MiB';
-                        return '<b>' + p.name + '</b><br>' + p.value + ' MiB (' + p.percent.toFixed(1) + '%)';
+                        if (!p.data._used && p.data._used !== 0) return null;
+                        var total = p.data._total || 0;
+                        var used = p.data._used || 0;
+                        var pct = total > 0 ? (used / total * 100).toFixed(1) : 0;
+                        return p.name + '<br>已用: ' + Math.round(used) + ' / ' + Math.round(total) + ' MiB (' + pct + '%)';
                     }},
-                    legend: { orient: 'vertical', right: 0, top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 11 },
-                        formatter: function(name) { return name.indexOf('空闲') !== -1 ? '' : name; },
-                        itemStyle: { borderWidth: 0 }
-                    },
-                    series: [{ type: 'pie', radius: ['30%', '65%'], center: ['40%', '50%'],
-                        label: { color: self.chartTextColor(), fontSize: 11, formatter: function(p) {
-                            return p.name.indexOf('空闲') !== -1 ? '' : p.name + '\n' + p.value + ' MiB';
-                        }},
-                        data: pieData
+                    legend: { orient: 'vertical', right: 0, top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll', data: legendNames },
+                    series: [{
+                        type: 'pie', radius: ['35%', '58%'], center: ['40%', '50%'],
+                        label: {
+                            color: self.chartTextColor(), fontSize: 11,
+                            formatter: function(p) {
+                                if (p.data._used === undefined) return '';
+                                return p.name + '\n' + Math.round(p.data._used) + ' MiB';
+                            }
+                        },
+                        labelLine: { length: 18, length2: 30, smooth: true },
+                        labelLayout: { hideOverlap: true },
+                        emphasis: { label: { fontSize: 12, fontWeight: 'bold' } },
+                        itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.25)', borderWidth: 2 },
+                        data: innerData
+                    }, {
+                        type: 'pie', radius: ['63%', '73%'], center: ['40%', '50%'],
+                        silent: true,
+                        label: { show: false },
+                        labelLine: { show: false },
+                        tooltip: { show: false },
+                        itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.2)', borderWidth: 2 },
+                        data: outerData
                     }]
                 }, true);
             }

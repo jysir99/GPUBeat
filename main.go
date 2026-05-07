@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,11 +23,14 @@ func getExeDir() string {
 	return filepath.Dir(exe)
 }
 
-func fetchHost(pool *SSHPool, hostCfg HostConfig, idx int, wg *sync.WaitGroup, results chan<- *HostGPUData) {
+func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, wg *sync.WaitGroup, results chan<- *HostGPUData) {
 	defer wg.Done()
 	start := time.Now()
 	output, err := pool.ExecuteCommand(hostCfg.Host, hostCfg.Port, hostCfg.Username, hostCfg.Password, nvidiaSMICmd)
 	elapsed := time.Since(start)
+	if ctx.Err() != nil {
+		return
+	}
 	if err != nil {
 		log.Printf("[刷新] %s (%s) 失败 %v: %s", hostCfg.Name, hostCfg.Host, elapsed, err)
 		results <- &HostGPUData{
@@ -45,22 +49,35 @@ func fetchHost(pool *SSHPool, hostCfg HostConfig, idx int, wg *sync.WaitGroup, r
 	results <- data
 }
 
-func backgroundRefresh(cfg *Config, logger *Logger, pool *SSHPool) {
+func backgroundRefresh(ctx context.Context, cfg *Config, logger *Logger, pool *SSHPool) {
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		start := time.Now()
 		var wg sync.WaitGroup
 		results := make(chan *HostGPUData, len(cfg.Hosts))
 
 		for i, hostCfg := range cfg.Hosts {
 			wg.Add(1)
-			go fetchHost(pool, hostCfg, i, &wg, results)
+			go fetchHost(ctx, pool, hostCfg, i, &wg, results)
 		}
 
 		wg.Wait()
 		close(results)
 
+		if ctx.Err() != nil {
+			return
+		}
+
 		allData := make([]*HostGPUData, len(cfg.Hosts))
 		for data := range results {
+			if cfg.Server.Privacy {
+				AnonymizeHostData(data)
+			}
 			allData[data.Order] = data
 		}
 
@@ -82,14 +99,35 @@ func backgroundRefresh(cfg *Config, logger *Logger, pool *SSHPool) {
 		})
 
 		log.Printf("[刷新] 完成 %v: %d 正常, %d 异常", time.Since(start), online, failed)
-		time.Sleep(time.Duration(cfg.Server.Refresh) * time.Second)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Duration(cfg.Server.Refresh) * time.Second):
+		}
 	}
 }
 
 func main() {
 	configPath := filepath.Join(getExeDir(), "config.yaml")
-	if len(os.Args) > 1 && os.Args[1] == "-c" && len(os.Args) > 2 {
-		configPath = os.Args[2]
+	cliPrivacy := false
+	for i := 1; i < len(os.Args); i++ {
+		if os.Args[i] == "-c" && i+1 < len(os.Args) {
+			configPath = os.Args[i+1]
+			i++
+		} else if os.Args[i] == "-privacy" {
+			cliPrivacy = true
+		} else if os.Args[i] == "-h" || os.Args[i] == "--help" {
+			fmt.Println("GPUBeat - GPU 服务器集群监控面板")
+			fmt.Println()
+			fmt.Println("用法: gpubeat [选项]")
+			fmt.Println()
+			fmt.Println("选项:")
+			fmt.Println("  -c <path>     指定配置文件路径 (默认: 同目录下 config.yaml)")
+			fmt.Println("  -privacy      启用隐私模式, 将实际用户名替换为 user1, user2 等")
+			fmt.Println("  -h, --help    显示帮助信息")
+			os.Exit(0)
+		}
 	}
 
 	cfg, err := LoadConfig(configPath)
@@ -97,8 +135,12 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	log.Printf("配置加载成功: %d 台服务器, 端口 %d, 刷新间隔 %ds",
-		len(cfg.Hosts), cfg.Server.Port, cfg.Server.Refresh)
+	if cliPrivacy {
+		cfg.Server.Privacy = true
+	}
+
+	log.Printf("配置加载成功: %d 台服务器, 端口 %d, 刷新间隔 %ds, 隐私模式: %v",
+		len(cfg.Hosts), cfg.Server.Port, cfg.Server.Refresh, cfg.Server.Privacy)
 
 	logger, err := NewLogger(filepath.Join(getExeDir(), "log", "host"))
 	if err != nil {
@@ -124,7 +166,10 @@ func main() {
 	pool := NewSSHPool()
 	defer pool.Close()
 
-	go backgroundRefresh(cfg, logger, pool)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go backgroundRefresh(ctx, cfg, logger, pool)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", loggingMiddleware(handleIndex, accessLogger))
@@ -133,15 +178,21 @@ func main() {
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("GPU Dashboard 启动: http://%s", addr)
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	srv := &http.Server{Addr: addr, Handler: mux}
 
 	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("服务启动失败: %v", err)
 		}
 	}()
 
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	cancel()
+	srvCtx, srvCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer srvCancel()
+	srv.Shutdown(srvCtx)
 	log.Println("服务已停止")
 }
