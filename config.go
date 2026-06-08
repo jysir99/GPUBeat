@@ -22,6 +22,7 @@ type ServerConfig struct {
 
 type TerminalConfig struct {
 	Enabled bool `yaml:"enabled"`
+	Token   string `yaml:"token"`
 }
 
 type HostConfig struct {

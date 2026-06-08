@@ -16,6 +16,7 @@ func TestLoadConfigReadsTerminalSwitch(t *testing.T) {
   privacy: true
   terminal:
     enabled: true
+    token: "let-me-in"
 hosts:
   - name: "gpu-a"
     host: "192.0.2.20"
@@ -32,6 +33,9 @@ hosts:
 	}
 	if !cfg.Server.Terminal.Enabled {
 		t.Fatal("terminal switch was not loaded")
+	}
+	if cfg.Server.Terminal.Token != "let-me-in" {
+		t.Fatalf("terminal token = %q, want let-me-in", cfg.Server.Terminal.Token)
 	}
 	if cfg.Hosts[0].Port != 22 {
 		t.Fatalf("default SSH port = %d, want 22", cfg.Hosts[0].Port)

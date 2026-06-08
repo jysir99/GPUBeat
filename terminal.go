@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/subtle"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
@@ -51,6 +52,10 @@ func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.authorized(r) {
+		http.Error(w, "terminal token is invalid", http.StatusUnauthorized)
 		return
 	}
 
@@ -128,6 +133,18 @@ func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func (h *TerminalHandler) authorized(r *http.Request) bool {
+	token := h.cfg.Server.Terminal.Token
+	if token == "" {
+		return true
+	}
+	supplied := r.URL.Query().Get("token")
+	if supplied == "" {
+		supplied = r.Header.Get("X-GPUBeat-Terminal-Token")
+	}
+	return subtle.ConstantTimeCompare([]byte(supplied), []byte(token)) == 1
 }
 
 func (h *TerminalHandler) findHost(name string) (HostConfig, bool) {

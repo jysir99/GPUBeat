@@ -228,6 +228,7 @@ server:
   privacy: false # privacy mode: replace real usernames with user1, user2, etc.
   terminal:
     enabled: false # set true to enable browser SSH terminals for configured hosts
+    token: "" # optional shared token required by the Web Terminal
 
 hosts:
   - name: "gpu-server-1"

@@ -122,6 +122,31 @@ func TestTerminalRejectsDisabledAndUnknownHosts(t *testing.T) {
 	}
 }
 
+func TestTerminalRequiresTokenWhenConfigured(t *testing.T) {
+	cfg := terminalTestConfig(true)
+	cfg.Server.Terminal.Token = "let-me-in"
+	opener := &fakeTerminalOpener{}
+	handler := NewTerminalHandler(cfg, opener)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/terminal?host=gpu-1", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("missing token status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/terminal?host=gpu-1&token=wrong", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong token status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+
+	if opener.calls != 0 {
+		t.Fatalf("opener called before token authorization")
+	}
+}
+
 func TestTerminalWebSocketForwardsOutputInputAndResizeThroughMiddleware(t *testing.T) {
 	cfg := terminalTestConfig(true)
 	session := newFakeTerminalSession()
@@ -171,6 +196,26 @@ func TestTerminalWebSocketForwardsOutputInputAndResizeThroughMiddleware(t *testi
 	}
 
 	writeClientJSON(t, conn, terminalClientMessage{Type: "close"})
+}
+
+func TestTerminalWebSocketAcceptsConfiguredToken(t *testing.T) {
+	cfg := terminalTestConfig(true)
+	cfg.Server.Terminal.Token = "let-me-in"
+	session := newFakeTerminalSession()
+	opener := &fakeTerminalOpener{session: session}
+	handler := NewTerminalHandler(cfg, opener)
+	server := httptest.NewServer(loggingMiddleware(handler.ServeHTTP, nil))
+	defer server.Close()
+	defer session.Close()
+
+	_, _, cleanup := dialWebSocket(t, server.URL, "/api/terminal?host=gpu-1&token=let-me-in")
+	defer cleanup()
+
+	opener.mu.Lock()
+	defer opener.mu.Unlock()
+	if opener.calls != 1 {
+		t.Fatalf("opener calls = %d, want 1", opener.calls)
+	}
 }
 
 func TestWebSocketAcceptKey(t *testing.T) {

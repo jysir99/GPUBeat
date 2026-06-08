@@ -5,6 +5,7 @@ server:
   privacy: false
   terminal:
     enabled: false  # Set true to enable browser SSH terminals for configured hosts.
+    token: ""        # Optional shared token required by the Web Terminal.
 
 hosts:
   - name: "gpu-server-1"

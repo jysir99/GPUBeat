@@ -319,6 +319,7 @@
                     <option value="">Select host</option>
                     <option v-for="h in hostOptions" :key="'term-' + h.hostname" :value="h.hostname">{{ h.name }}</option>
                 </select>
+                <input class="terminal-select" type="password" v-model="terminalToken" placeholder="Token" :disabled="terminalConnected" @change="saveTerminalToken">
                 <button class="btn" @click="connectTerminal" :disabled="terminalConnected || !terminalHost">Connect</button>
                 <button class="btn danger" @click="disconnectTerminal" :disabled="!terminalConnected">Disconnect</button>
                 <button class="btn secondary" @click="clearTerminal">Clear</button>
@@ -361,6 +362,7 @@ new Vue({
         terminalFit: null,
         terminalSocket: null,
         terminalHost: '',
+        terminalToken: '',
         terminalConnected: false,
         terminalStatus: 'Disconnected',
         terminalStatusType: '',
@@ -389,6 +391,7 @@ new Vue({
         this.fetchData();
         this.startAutoRefresh();
         this.initTerminal();
+        this.terminalToken = localStorage.getItem('gpu-terminal-token') || '';
         var self = this;
         window.addEventListener('resize', function() {
             if (self.barChart) self.barChart.resize();
@@ -659,7 +662,11 @@ new Vue({
         connectTerminal: function() {
             if (!this.terminal || !this.terminalHost || this.terminalConnected) return;
             var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            this.saveTerminalToken();
             var url = protocol + window.location.host + '/api/terminal?host=' + encodeURIComponent(this.terminalHost) + '&cols=' + this.terminal.cols + '&rows=' + this.terminal.rows;
+            if (this.terminalToken) {
+                url += '&token=' + encodeURIComponent(this.terminalToken);
+            }
             var self = this;
             this.terminalStatus = 'Connecting to ' + this.terminalHost + '...';
             this.terminalStatusType = '';
@@ -690,7 +697,7 @@ new Vue({
                 }
             };
             this.terminalSocket.onerror = function() {
-                self.terminalStatus = 'Connection failed. Check server.terminal.enabled.';
+                self.terminalStatus = 'Connection failed. Check server.terminal settings.';
                 self.terminalStatusType = 'error';
             };
             this.terminalSocket.onclose = function() {
@@ -712,6 +719,13 @@ new Vue({
         },
         clearTerminal: function() {
             if (this.terminal) this.terminal.clear();
+        },
+        saveTerminalToken: function() {
+            if (this.terminalToken) {
+                localStorage.setItem('gpu-terminal-token', this.terminalToken);
+            } else {
+                localStorage.removeItem('gpu-terminal-token');
+            }
         }
     },
     watch: {
