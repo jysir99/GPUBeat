@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/subtle"
 	"crypto/sha1"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"

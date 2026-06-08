@@ -159,14 +159,8 @@ func TestTerminalWebSocketForwardsOutputInputAndResizeThroughMiddleware(t *testi
 	ws, conn, cleanup := dialWebSocket(t, server.URL, "/api/terminal?host=gpu-1&cols=120&rows=40")
 	defer cleanup()
 
-	opener.mu.Lock()
-	if opener.calls != 1 {
-		t.Fatalf("opener calls = %d, want 1", opener.calls)
-	}
-	if opener.host.Name != "gpu-1" || opener.cols != 120 || opener.rows != 40 {
-		t.Fatalf("open args = host %q cols %d rows %d", opener.host.Name, opener.cols, opener.rows)
-	}
-	opener.mu.Unlock()
+	waitForOpenerCalls(t, opener, 1)
+	opener.assertLastOpen(t, "gpu-1", 120, 40)
 
 	go session.send("hello from server")
 	var out terminalServerMessage
@@ -211,10 +205,32 @@ func TestTerminalWebSocketAcceptsConfiguredToken(t *testing.T) {
 	_, _, cleanup := dialWebSocket(t, server.URL, "/api/terminal?host=gpu-1&token=let-me-in")
 	defer cleanup()
 
+	waitForOpenerCalls(t, opener, 1)
+}
+
+func waitForOpenerCalls(t *testing.T, opener *fakeTerminalOpener, want int) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		opener.mu.Lock()
+		calls := opener.calls
+		opener.mu.Unlock()
+		if calls == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	opener.mu.Lock()
 	defer opener.mu.Unlock()
-	if opener.calls != 1 {
-		t.Fatalf("opener calls = %d, want 1", opener.calls)
+	t.Fatalf("opener calls = %d, want %d", opener.calls, want)
+}
+
+func (o *fakeTerminalOpener) assertLastOpen(t *testing.T, host string, cols, rows int) {
+	t.Helper()
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.host.Name != host || o.cols != cols || o.rows != rows {
+		t.Fatalf("open args = host %q cols %d rows %d", o.host.Name, o.cols, o.rows)
 	}
 }
 
