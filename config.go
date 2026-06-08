@@ -13,10 +13,15 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host    string `yaml:"host"`
-	Port    int    `yaml:"port"`
-	Refresh int    `yaml:"refresh"`
-	Privacy bool   `yaml:"privacy"`
+	Host     string         `yaml:"host"`
+	Port     int            `yaml:"port"`
+	Refresh  int            `yaml:"refresh"`
+	Privacy  bool           `yaml:"privacy"`
+	Terminal TerminalConfig `yaml:"terminal"`
+}
+
+type TerminalConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 type HostConfig struct {

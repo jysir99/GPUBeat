@@ -226,6 +226,8 @@ server:
   port: 9988 # listen port
   refresh: 3 # refresh interval in seconds
   privacy: false # privacy mode: replace real usernames with user1, user2, etc.
+  terminal:
+    enabled: false # set true to enable browser SSH terminals for configured hosts
 
 hosts:
   - name: "gpu-server-1"

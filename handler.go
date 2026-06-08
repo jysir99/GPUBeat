@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"embed"
 	"encoding/json"
+	"errors"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -65,6 +68,14 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.status = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := rw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("hijack is not supported")
+	}
+	return hijacker.Hijack()
 }
 
 func loggingMiddleware(next http.HandlerFunc, accessLogger *Logger) http.HandlerFunc {

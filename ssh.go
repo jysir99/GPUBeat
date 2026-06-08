@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"sync"
@@ -34,7 +35,7 @@ func (p *SSHPool) getClient(host string, port int, username, password string) (*
 		}
 		client.Close()
 		delete(p.clients, addr)
-		log.Printf("[连接池] %s 连接断开, 准备重连", addr)
+		log.Printf("[SSH] %s connection dropped, reconnecting", addr)
 	}
 	p.mu.Unlock()
 
@@ -49,7 +50,7 @@ func (p *SSHPool) getClient(host string, port int, username, password string) (*
 
 	client, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
-		log.Printf("[连接池] %s 创建连接失败: %v", addr, err)
+		log.Printf("[SSH] %s dial failed: %v", addr, err)
 		return nil, err
 	}
 
@@ -57,7 +58,7 @@ func (p *SSHPool) getClient(host string, port int, username, password string) (*
 	p.clients[addr] = client
 	p.mu.Unlock()
 
-	log.Printf("[连接池] %s 创建连接成功", addr)
+	log.Printf("[SSH] %s connected", addr)
 	return client, nil
 }
 
@@ -67,14 +68,14 @@ func (p *SSHPool) ExecuteCommand(host string, port int, username, password, comm
 	client, err := p.getClient(host, port, username, password)
 	if err != nil {
 		if strings.Contains(err.Error(), "unable to authenticate") {
-			return "", fmt.Errorf("SSH认证失败: %w", err)
+			return "", fmt.Errorf("SSH authentication failed: %w", err)
 		}
-		return "", fmt.Errorf("SSH连接失败: %w", err)
+		return "", fmt.Errorf("SSH connection failed: %w", err)
 	}
 
 	session, err := client.NewSession()
 	if err != nil {
-		log.Printf("[连接池] %s 会话创建失败, 清除连接并重连", addr)
+		log.Printf("[SSH] %s session failed, reconnecting", addr)
 		p.mu.Lock()
 		if c, ok := p.clients[addr]; ok {
 			c.Close()
@@ -84,12 +85,12 @@ func (p *SSHPool) ExecuteCommand(host string, port int, username, password, comm
 
 		client, err = p.getClient(host, port, username, password)
 		if err != nil {
-			return "", fmt.Errorf("SSH重连失败: %w", err)
+			return "", fmt.Errorf("SSH reconnect failed: %w", err)
 		}
-		log.Printf("[连接池] %s 重连成功", addr)
+		log.Printf("[SSH] %s reconnected", addr)
 		session, err = client.NewSession()
 		if err != nil {
-			return "", fmt.Errorf("创建SSH会话失败: %w", err)
+			return "", fmt.Errorf("create SSH session failed: %w", err)
 		}
 	}
 	defer session.Close()
@@ -98,15 +99,149 @@ func (p *SSHPool) ExecuteCommand(host string, port int, username, password, comm
 	if err != nil {
 		out := string(output)
 		if strings.Contains(out, "command not found") || strings.Contains(out, "not found") {
-			return "", fmt.Errorf("nvidia-smi未安装: %s", strings.TrimSpace(out))
+			return "", fmt.Errorf("nvidia-smi is not installed: %s", strings.TrimSpace(out))
 		}
 		if strings.Contains(out, "NVIDIA-SMI has failed") || strings.Contains(out, "Failed to initialize NVML") {
-			return "", fmt.Errorf("nvidia-smi执行失败: %s", strings.TrimSpace(out))
+			return "", fmt.Errorf("nvidia-smi failed: %s", strings.TrimSpace(out))
 		}
-		return "", fmt.Errorf("命令执行失败: %s", strings.TrimSpace(out))
+		return "", fmt.Errorf("command failed: %s", strings.TrimSpace(out))
 	}
 
 	return string(output), nil
+}
+
+type TerminalSession interface {
+	io.Reader
+	io.Writer
+	Resize(cols, rows int) error
+	Close() error
+	Wait() error
+}
+
+type sshTerminalSession struct {
+	session *ssh.Session
+	stdin   io.WriteCloser
+	output  *io.PipeReader
+}
+
+func (s *sshTerminalSession) Read(p []byte) (int, error) {
+	return s.output.Read(p)
+}
+
+func (s *sshTerminalSession) Write(p []byte) (int, error) {
+	return s.stdin.Write(p)
+}
+
+func (s *sshTerminalSession) Resize(cols, rows int) error {
+	if cols <= 0 {
+		cols = 100
+	}
+	if rows <= 0 {
+		rows = 30
+	}
+	return s.session.WindowChange(rows, cols)
+}
+
+func (s *sshTerminalSession) Wait() error {
+	return s.session.Wait()
+}
+
+func (s *sshTerminalSession) Close() error {
+	if s.stdin != nil {
+		_ = s.stdin.Close()
+	}
+	if s.output != nil {
+		_ = s.output.Close()
+	}
+	return s.session.Close()
+}
+
+func (p *SSHPool) OpenTerminal(hostCfg HostConfig, cols, rows int) (TerminalSession, error) {
+	addr := fmt.Sprintf("%s:%d", hostCfg.Host, hostCfg.Port)
+	if cols <= 0 {
+		cols = 100
+	}
+	if rows <= 0 {
+		rows = 30
+	}
+
+	client, err := p.getClient(hostCfg.Host, hostCfg.Port, hostCfg.Username, hostCfg.Password)
+	if err != nil {
+		return nil, fmt.Errorf("SSH terminal connection failed: %w", err)
+	}
+
+	session, err := client.NewSession()
+	if err != nil {
+		p.mu.Lock()
+		if c, ok := p.clients[addr]; ok {
+			c.Close()
+			delete(p.clients, addr)
+		}
+		p.mu.Unlock()
+
+		client, err = p.getClient(hostCfg.Host, hostCfg.Port, hostCfg.Username, hostCfg.Password)
+		if err != nil {
+			return nil, fmt.Errorf("SSH terminal reconnect failed: %w", err)
+		}
+		session, err = client.NewSession()
+		if err != nil {
+			return nil, fmt.Errorf("SSH terminal session failed: %w", err)
+		}
+	}
+
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		session.Close()
+		return nil, fmt.Errorf("terminal stdin failed: %w", err)
+	}
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		session.Close()
+		return nil, fmt.Errorf("terminal stdout failed: %w", err)
+	}
+	stderr, err := session.StderrPipe()
+	if err != nil {
+		session.Close()
+		return nil, fmt.Errorf("terminal stderr failed: %w", err)
+	}
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          1,
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
+	}
+	if err := session.RequestPty("xterm-256color", rows, cols, modes); err != nil {
+		session.Close()
+		return nil, fmt.Errorf("request pty failed: %w", err)
+	}
+
+	outputReader, outputWriter := io.Pipe()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(outputWriter, stdout)
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(outputWriter, stderr)
+	}()
+	go func() {
+		wg.Wait()
+		_ = outputWriter.Close()
+	}()
+
+	if err := session.Shell(); err != nil {
+		session.Close()
+		_ = outputReader.Close()
+		return nil, fmt.Errorf("start shell failed: %w", err)
+	}
+
+	return &sshTerminalSession{
+		session: session,
+		stdin:   stdin,
+		output:  outputReader,
+	}, nil
 }
 
 func (p *SSHPool) Close() {

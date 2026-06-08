@@ -32,7 +32,7 @@ func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, 
 		return
 	}
 	if err != nil {
-		log.Printf("[刷新] %s (%s) 失败 %v: %s", hostCfg.Name, hostCfg.Host, elapsed, err)
+		log.Printf("[refresh] %s (%s) failed after %v: %s", hostCfg.Name, hostCfg.Host, elapsed, err)
 		results <- &HostGPUData{
 			Hostname: hostCfg.Name,
 			Host:     hostCfg.Host,
@@ -43,9 +43,9 @@ func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, 
 		}
 		return
 	}
-	log.Printf("[刷新] %s (%s) 成功 %v, %d GPUs", hostCfg.Name, hostCfg.Host, elapsed, len(ParseGPUData(output, hostCfg.Name, hostCfg.Host).GPUs))
 	data := ParseGPUData(output, hostCfg.Name, hostCfg.Host)
 	data.Order = idx
+	log.Printf("[refresh] %s (%s) ok after %v, %d GPUs", hostCfg.Name, hostCfg.Host, elapsed, len(data.GPUs))
 	results <- data
 }
 
@@ -98,7 +98,7 @@ func backgroundRefresh(ctx context.Context, cfg *Config, logger *Logger, pool *S
 			"update_time": time.Now().Format("2006-01-02 15:04:05"),
 		})
 
-		log.Printf("[刷新] 完成 %v: %d 正常, %d 异常", time.Since(start), online, failed)
+		log.Printf("[refresh] done in %v: %d online, %d failed", time.Since(start), online, failed)
 
 		select {
 		case <-ctx.Done():
@@ -118,39 +118,39 @@ func main() {
 		} else if os.Args[i] == "-privacy" {
 			cliPrivacy = true
 		} else if os.Args[i] == "-h" || os.Args[i] == "--help" {
-			fmt.Println("GPUBeat - GPU 服务器集群监控面板")
+			fmt.Println("GPUBeat - GPU server cluster dashboard")
 			fmt.Println()
-			fmt.Println("用法: gpubeat [选项]")
+			fmt.Println("Usage: gpubeat [options]")
 			fmt.Println()
-			fmt.Println("选项:")
-			fmt.Println("  -c <path>     指定配置文件路径 (默认: 同目录下 config.yaml)")
-			fmt.Println("  -privacy      启用隐私模式, 将实际用户名替换为 user1, user2 等")
-			fmt.Println("  -h, --help    显示帮助信息")
+			fmt.Println("Options:")
+			fmt.Println("  -c <path>     specify config file path (default: config.yaml beside the executable)")
+			fmt.Println("  -privacy      replace real process usernames with user1, user2, ...")
+			fmt.Println("  -h, --help    show help")
 			os.Exit(0)
 		}
 	}
 
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
-		log.Fatalf("加载配置失败: %v", err)
+		log.Fatalf("load config failed: %v", err)
 	}
 
 	if cliPrivacy {
 		cfg.Server.Privacy = true
 	}
 
-	log.Printf("配置加载成功: %d 台服务器, 端口 %d, 刷新间隔 %ds, 隐私模式: %v",
-		len(cfg.Hosts), cfg.Server.Port, cfg.Server.Refresh, cfg.Server.Privacy)
+	log.Printf("config loaded: %d hosts, port %d, refresh %ds, privacy=%v, terminal=%v",
+		len(cfg.Hosts), cfg.Server.Port, cfg.Server.Refresh, cfg.Server.Privacy, cfg.Server.Terminal.Enabled)
 
 	logger, err := NewLogger(filepath.Join(getExeDir(), "log", "host"))
 	if err != nil {
-		log.Printf("主机日志初始化失败: %v, 继续运行", err)
+		log.Printf("host logger init failed: %v, continuing", err)
 		logger = nil
 	}
 
 	accessLogger, err := NewLogger(filepath.Join(getExeDir(), "log", "access"))
 	if err != nil {
-		log.Printf("访问日志初始化失败: %v, 继续运行", err)
+		log.Printf("access logger init failed: %v, continuing", err)
 		accessLogger = nil
 	}
 
@@ -174,15 +174,16 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", loggingMiddleware(handleIndex, accessLogger))
 	mux.HandleFunc("/api/gpustats", loggingMiddleware(handleGPUStats, accessLogger))
+	mux.Handle("/api/terminal", loggingMiddleware(NewTerminalHandler(cfg, pool).ServeHTTP, accessLogger))
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-	log.Printf("GPU Dashboard 启动: http://%s", addr)
+	log.Printf("GPU dashboard started: http://%s", addr)
 
 	srv := &http.Server{Addr: addr, Handler: mux}
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("服务启动失败: %v", err)
+			log.Fatalf("server start failed: %v", err)
 		}
 	}()
 
@@ -193,6 +194,6 @@ func main() {
 	cancel()
 	srvCtx, srvCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer srvCancel()
-	srv.Shutdown(srvCtx)
-	log.Println("服务已停止")
+	_ = srv.Shutdown(srvCtx)
+	log.Println("server stopped")
 }

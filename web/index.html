@@ -4,8 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GPUBeat</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
     <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <style>
         :root {
             --bg-primary: #1e2a3a;
@@ -17,16 +20,14 @@
             --border-nav-btn: #4a6278;
             --text-primary: #e0e8ed;
             --text-secondary: #a0b4c4;
-            --text-muted: #6e8494;
+            --text-muted: #7f95a5;
             --border-color: #3d5570;
-            --border-light: rgba(255,255,255,0.06);
+            --border-light: rgba(255,255,255,0.07);
             --hover-bg: rgba(255,255,255,0.06);
             --shadow: rgba(0,0,0,0.2);
-            --table-header: #243447;
-            --error-bg: rgba(220,53,69,0.15);
             --chart-bg: #2b3d52;
-            --modal-bg: #1e2a3a;
-            --split-color: #3d5570;
+            --terminal-bg: #111820;
+            --terminal-panel: #172231;
             --progress-bar: #27ae60;
             --progress-track: rgba(255,255,255,0.08);
         }
@@ -40,284 +41,257 @@
             --border-nav-btn: #dfe6e9;
             --text-primary: #2c3e50;
             --text-secondary: #636e72;
-            --text-muted: #b2bec3;
+            --text-muted: #9aa3a8;
             --border-color: #dfe6e9;
             --border-light: #f0f0f0;
             --hover-bg: rgba(0,0,0,0.03);
-            --shadow: rgba(0,0,0,0.25);
-            --table-header: #f8f9fa;
-            --error-bg: rgba(220,53,69,0.08);
+            --shadow: rgba(0,0,0,0.18);
             --chart-bg: #ffffff;
-            --modal-bg: #ffffff;
-            --split-color: #dfe6e9;
+            --terminal-bg: #0f1720;
+            --terminal-panel: #ffffff;
             --progress-bar: #27ae60;
-            --progress-track: rgba(0,0,0,0.2);
+            --progress-track: rgba(0,0,0,0.16);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; transition: background 0.3s, color 0.3s; overflow-x: hidden; }
-
-        .navbar { background: var(--bg-nav); padding: 10px 24px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; box-shadow: 0 2px 10px var(--shadow); position: sticky; top: 0; z-index: 100; transition: background 0.3s; }
-        .navbar .title { font-size: 20px; font-weight: 700; color: var(--text-nav-title); white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow-x: hidden;
+        }
+        button, input, select { font: inherit; }
+        .navbar {
+            background: var(--bg-nav);
+            padding: 10px 24px;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            box-shadow: 0 2px 10px var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-nav-title);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         .progress-ring { width: 18px; height: 18px; transform: rotate(-90deg); flex-shrink: 0; }
         .progress-ring__circle { stroke: var(--progress-bar); fill: none; }
-        .navbar .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; color: var(--text-nav); }
-        .clock-main { font-size: 15px; font-weight: 600; letter-spacing: 1px; }
-        .clock-sub { font-size: 11px; opacity: 0.6; margin-top: 1px; }
-        .error-badge { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-        .navbar .controls { display: flex; align-items: center; gap: 8px; white-space: nowrap; justify-self: end; }
-        .navbar .controls select, .navbar .controls input { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-nav-btn); background: var(--bg-nav-btn); color: var(--text-primary); font-size: 13px; }
-        .navbar .controls select { min-width: 140px; }
-        .navbar .controls input { width: 50px; text-align: center; }
-        .navbar .controls button { padding: 5px 12px; border-radius: 4px; border: none; cursor: pointer; background: #27ae60; color: #fff; font-size: 13px; transition: background 0.2s; }
-        .navbar .controls button:hover { background: #2ecc71; }
-        .theme-btn { background: var(--bg-nav-btn) !important; border: 1px solid var(--border-nav-btn) !important; color: var(--text-nav) !important; font-size: 16px !important; padding: 3px 8px !important; }
-        .theme-btn:hover { opacity: 0.8; }
-
-        /* Progress ring integrated into navbar title */
-
-        /* Cards */
-        .cards-section { padding: 16px 0 0; }
-        .cards-host-header { display: flex; align-items: center; gap: 10px; padding: 0 24px 10px; }
-        .cards-host-header .ch-name { font-size: 16px; font-weight: 700; }
-        .cards-host-header .ch-status { font-size: 11px; padding: 2px 8px; border-radius: 8px; }
-        .ch-status.online { background: rgba(39,174,96,0.3); color: #2ecc71; }
-        .ch-status.error { background: rgba(231,76,60,0.3); color: #e74c3c; }
-        .cards-host-header .ch-detail { margin-left: auto; font-size: 12px; color: #3498db; cursor: pointer; }
-        .cards-host-header .ch-detail:hover { text-decoration: underline; }
-        .cards-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 12px 24px; }
-        .gpu-card { background: var(--bg-secondary); border-radius: 8px; padding: 14px; box-shadow: 0 2px 8px var(--shadow); border-left: 4px solid transparent; transition: transform 0.2s, box-shadow 0.2s; min-height: 120px; display: flex; flex-direction: column; }
-        .gpu-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px var(--shadow); }
-        .gpu-card .card-gpu-name { font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-        .gpu-card .card-gpu-name .gpu-idx { font-size: 12px; opacity: 0.7; }
-        .gpu-card .card-metrics { display: flex; justify-content: space-between; gap: 6px; }
-        .gpu-card .card-metric { text-align: center; flex: 1; min-width: 50px; }
-        .gpu-card .card-metric .val { font-size: 22px; font-weight: 700; }
-        .gpu-card .card-metric .lbl { font-size: 11px; opacity: 0.7; }
-        .gpu-card .card-users { margin-top: auto; padding-top: 8px; font-size: 12px; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 18px; }
-        .error-card-inner { color: #e74c3c; font-size: 13px; padding: 8px 0; }
-
-        .table-section { padding: 0 24px 16px; }
-        .table-wrapper { overflow-x: auto; border-radius: 8px; box-shadow: 0 2px 10px var(--shadow); }
-        table { width: 100%; border-collapse: collapse; background: var(--bg-secondary); table-layout: fixed; min-width: 1300px; }
-        thead { background: var(--bg-primary); }
-        th { padding: 12px 14px; text-align: left; font-size: 13px; font-weight: 700; color: var(--text-primary); white-space: nowrap; border-bottom: 3px solid var(--border-color); letter-spacing: 0.5px; }
-        th:nth-child(1) { color: #3498db; }
-        th:nth-child(2) { color: #e74c3c; }
-        th:nth-child(3) { color: #9b59b6; }
-        th:nth-child(4) { color: #2ecc71; }
-        th:nth-child(5) { color: #1abc9c; }
-        th:nth-child(6) { color: #f39c12; }
-        th:nth-child(7) { color: #e67e22; }
-        td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid var(--border-light); }
-        tr:hover td { background: var(--hover-bg); }
-        .mem-high { color: #e74c3c; font-weight: 600; }
-        .mem-mid { color: #17a2b8; }
-        .mem-low { color: var(--text-primary); }
-        .temp-high { color: #e74c3c; font-weight: 600; }
-        .temp-mid { color: #f39c12; }
-        .temp-low { color: #2ecc71; }
-        tr.error-row td { background: var(--error-bg); color: #e74c3c; }
-
-        tr.host-separator td { background: var(--table-header); padding: 10px 12px; border-bottom: 2px solid var(--border-color); border-top: 3px solid var(--split-color); box-shadow: inset 4px 0 0 0 var(--host-accent, var(--split-color)); }
-        tr.host-separator:first-child td { border-top: none; }
-        .host-tag { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-        .sep-name { font-weight: 700; font-size: 14px; color: var(--text-primary); }
-        .sep-host-info { display: inline-flex; align-items: center; min-width: 200px; flex-shrink: 0; }
-        .sep-status { font-size: 11px; padding: 2px 8px; border-radius: 8px; margin-left: 8px; }
-        .sep-status.online { background: rgba(39,174,96,0.3); color: #2ecc71; }
-        .sep-status.error { background: rgba(231,76,60,0.3); color: #e74c3c; }
-        .sep-gpu-count { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
-        .sep-sys { font-size: 12px; color: var(--text-muted); margin-left: 10px; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
-        .sep-sys strong { font-weight: 600; color: var(--text-primary); }
-        .sys-mem-val { display: inline-block; min-width: 110px; font-weight: 600; color: var(--text-primary); }
-        .sys-mem-mini { display: inline-block; width: 40px; height: 6px; background: rgba(128,128,128,0.2); border-radius: 3px; overflow: hidden; vertical-align: middle; }
-        .sys-mem-mini-inner { display: block; height: 100%; border-radius: 3px; transition: width 0.6s ease; }
-        .view-detail { margin-left: auto; font-size: 12px; font-weight: 400; color: #3498db; cursor: pointer; transition: color 0.2s; flex-shrink: 0; }
-        .view-detail:hover { color: #2980b9; text-decoration: underline; }
-
-        .charts-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px 24px; }
-        .chart-container { background: var(--chart-bg); border-radius: 8px; padding: 16px; box-shadow: 0 2px 10px var(--shadow); transition: background 0.3s; }
-        .chart-container h3 { font-size: 15px; margin-bottom: 12px; color: var(--text-primary); }
-        .chart-box { height: 320px; }
-
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; align-items: center; justify-content: center; }
-        .modal-content { background: var(--modal-bg); border-radius: 12px; padding: 24px; max-width: 900px; width: 92%; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: background 0.3s; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .modal-header h2 { font-size: 18px; color: var(--text-primary); }
-        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
-        .modal-close:hover { background: var(--hover-bg); color: var(--text-primary); }
-        .modal-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .modal-chart-box { height: 280px; }
-
-        .sparkline-cell { display: flex; align-items: center; gap: 8px; }
-        .sparkline-val { min-width: 95px; text-align: right; }
-        .sparkline { flex: 1; min-width: 0; height: 22px; }
-        .mem-bar { flex: 1; min-width: 0; height: 14px; background: var(--progress-track); border-radius: 7px; overflow: hidden; }
-        .mem-bar-inner { display: block; height: 100%; border-radius: 7px; transition: width 0.6s ease; }
-        .footer { text-align: center; padding: 16px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border-color); }
-        .footer a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
-        .footer a:hover { color: var(--text-primary); text-decoration: underline; }
-
-        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
-        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
-        .empty-state p { font-size: 14px; }
-
-        @media (max-width: 768px) {
-            .charts-section { grid-template-columns: 1fr; padding: 16px 12px; }
-            .chart-box { height: 260px; }
-            .modal-charts { grid-template-columns: 1fr; }
-            .cards-flow { padding: 12px; grid-template-columns: 1fr; }
-            .cards-host-header { padding: 0 12px 10px; }
-            .table-section { padding: 0 12px 16px; }
-            .navbar { display: flex; flex-wrap: wrap; padding: 8px 12px; gap: 6px 0; }
-            .navbar .title { font-size: 17px; }
-            .navbar .center { flex-direction: row; align-items: center; gap: 8px; margin-left: auto; }
-            .clock-sub { margin-top: 0; }
-            .navbar .controls { width: 100%; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
-            .navbar .controls select { min-width: 0; flex: 1; }
-            .navbar .controls input { width: 40px; }
-            .gpu-card .card-metric .val { font-size: 18px; }
-            .sep-sys, .sep-host-info { min-width: auto !important; }
-            .sep-sys { font-size: 11px !important; }
+        .center { display: flex; flex-direction: column; align-items: center; color: var(--text-nav); }
+        .clock-main { font-size: 15px; font-weight: 600; }
+        .clock-sub { font-size: 11px; opacity: 0.65; margin-top: 1px; }
+        .error-badge { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-top: 3px; }
+        .controls { display: flex; align-items: center; gap: 8px; white-space: nowrap; justify-self: end; }
+        .controls select, .controls input, .terminal-select {
+            padding: 5px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-nav-btn);
+            background: var(--bg-nav-btn);
+            color: var(--text-primary);
+            font-size: 13px;
         }
-
-        @media (max-width: 480px) {
-            .cards-flow { padding: 8px; gap: 8px; }
-            .table-section { padding: 0 8px 12px; }
-            .gpu-card { padding: 10px; }
-            .gpu-card .card-metric .val { font-size: 16px; }
-            .gpu-card .card-metric .lbl { font-size: 10px; }
+        .controls select { min-width: 140px; }
+        .controls input { width: 54px; text-align: center; }
+        .btn {
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            background: #27ae60;
+            color: #fff;
+            font-size: 13px;
+            transition: opacity 0.2s, background 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn.secondary { background: var(--bg-nav-btn); border-color: var(--border-nav-btn); color: var(--text-primary); }
+        .btn.danger { background: #c0392b; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .section { padding: 16px 24px; }
+        .cards-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .gpu-card {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 14px;
+            box-shadow: 0 2px 8px var(--shadow);
+            border-left: 4px solid transparent;
+            min-height: 118px;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-gpu-name { font-size: 13px; font-weight: 650; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+        .gpu-idx { font-size: 12px; opacity: 0.7; }
+        .card-metrics { display: flex; justify-content: space-between; gap: 6px; }
+        .card-metric { text-align: center; flex: 1; min-width: 50px; }
+        .card-metric .val { font-size: 22px; font-weight: 700; line-height: 1.2; }
+        .card-metric .lbl { font-size: 11px; opacity: 0.7; }
+        .card-users { margin-top: auto; padding-top: 8px; font-size: 12px; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 18px; }
+        .host-tag { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .temp-high, .mem-high { color: #e74c3c; }
+        .temp-mid, .mem-mid { color: #f39c12; }
+        .temp-low { color: #2ecc71; }
+        .mem-low { color: var(--text-primary); }
+        .table-wrapper { overflow-x: auto; border-radius: 8px; box-shadow: 0 2px 10px var(--shadow); }
+        table { width: 100%; border-collapse: collapse; background: var(--bg-secondary); table-layout: fixed; min-width: 1100px; }
+        thead { background: var(--bg-primary); }
+        th { padding: 12px 14px; text-align: left; font-size: 13px; font-weight: 700; border-bottom: 3px solid var(--border-color); white-space: nowrap; }
+        td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+        tr:hover td { background: var(--hover-bg); }
+        .host-row td { background: var(--bg-primary); border-top: 3px solid var(--border-color); font-weight: 700; }
+        .host-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+        .status { font-size: 11px; padding: 2px 8px; border-radius: 8px; }
+        .status.online { background: rgba(39,174,96,0.18); color: #2ecc71; }
+        .status.error { background: rgba(231,76,60,0.18); color: #e74c3c; }
+        .muted { color: var(--text-muted); }
+        .mem-bar { display: inline-block; width: 120px; height: 12px; background: var(--progress-track); border-radius: 6px; overflow: hidden; vertical-align: middle; margin-left: 8px; }
+        .mem-bar-inner { display: block; height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+        .charts-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 4px 24px 16px; }
+        .chart-container { background: var(--chart-bg); border-radius: 8px; padding: 16px; box-shadow: 0 2px 10px var(--shadow); }
+        .chart-container h3, .terminal-title { font-size: 15px; margin-bottom: 12px; color: var(--text-primary); }
+        .chart-box { height: 320px; }
+        .terminal-section { padding: 4px 24px 20px; }
+        .terminal-panel { background: var(--terminal-panel); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 2px 10px var(--shadow); overflow: hidden; }
+        .terminal-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+        .terminal-select { min-width: 180px; }
+        .terminal-status { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+        .terminal-status.connected { color: #2ecc71; }
+        .terminal-status.error { color: #e74c3c; }
+        .terminal-box { height: 420px; background: var(--terminal-bg); padding: 8px; }
+        .terminal-box .xterm { height: 100%; }
+        .empty-state { text-align: center; padding: 56px 20px; color: var(--text-muted); }
+        .empty-state .icon { font-size: 44px; margin-bottom: 12px; }
+        .footer { text-align: center; padding: 16px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border-color); }
+        .footer a { color: var(--text-muted); text-decoration: none; }
+        .footer a:hover { color: var(--text-primary); text-decoration: underline; }
+        @media (max-width: 768px) {
+            .navbar { display: flex; flex-wrap: wrap; padding: 8px 12px; gap: 6px; }
+            .center { flex-direction: row; gap: 8px; margin-left: auto; }
+            .controls { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
+            .controls select { min-width: 0; flex: 1; }
+            .section, .terminal-section { padding-left: 12px; padding-right: 12px; }
+            .charts-section { grid-template-columns: 1fr; padding-left: 12px; padding-right: 12px; }
+            .chart-box { height: 260px; }
+            .terminal-box { height: 360px; }
+            .terminal-status { width: 100%; margin-left: 0; }
         }
     </style>
 </head>
 <body>
 <div id="app">
     <div class="navbar">
-        <div class="title">GPUBeat<svg class="progress-ring" viewBox="0 0 18 18"><circle class="progress-ring__bg" cx="9" cy="9" r="7" stroke="var(--progress-track)" stroke-width="2" fill="none"/><circle class="progress-ring__circle" ref="progressRing" cx="9" cy="9" r="7" stroke-width="2" stroke-dasharray="43.98" stroke-dashoffset="43.98" stroke-linecap="round"/></svg></div>
+        <div class="title">
+            GPUBeat
+            <svg class="progress-ring" viewBox="0 0 18 18">
+                <circle cx="9" cy="9" r="7" stroke="var(--progress-track)" stroke-width="2" fill="none"></circle>
+                <circle class="progress-ring__circle" ref="progressRing" cx="9" cy="9" r="7" stroke-width="2" stroke-dasharray="43.98" stroke-dashoffset="43.98" stroke-linecap="round"></circle>
+            </svg>
+        </div>
         <div class="center">
             <span class="clock-main">{{ currentDate }} {{ currentTime }}</span>
-                <span class="clock-sub">{{ refreshAgo }}秒前刷新</span>
-            <span v-if="errorCount > 0" class="error-badge">⚠ {{ errorCount }} 台异常</span>
+            <span class="clock-sub">{{ refreshAgo }}s ago</span>
+            <span v-if="errorCount > 0" class="error-badge">{{ errorCount }} errors</span>
         </div>
         <div class="controls">
             <select v-model="selectedHost">
-                <option value="all">全部主机</option>
+                <option value="all">All hosts</option>
                 <option v-for="h in hostOptions" :key="h.hostname" :value="h.hostname">{{ h.name }}</option>
             </select>
-            <span style="color:var(--text-nav)">间隔</span>
-            <input type="number" v-model.number="refreshInterval" min="1" max="60"> 秒
-            <button @click="fetchData">刷新</button>
-            <button class="theme-btn" @click="toggleTheme">{{ theme === 'dark' ? '☀' : '🌙' }}</button>
+            <span style="color:var(--text-nav)">Interval</span>
+            <input type="number" v-model.number="refreshInterval" min="1" max="60">
+            <button class="btn" @click="fetchData">Refresh</button>
+            <button class="btn secondary" @click="toggleTheme">{{ theme === 'dark' ? 'Light' : 'Dark' }}</button>
         </div>
     </div>
 
     <div v-if="filteredStats.length === 0 && !update_time" class="empty-state">
-        <div class="icon">🖥️</div>
-        <p>等待数据加载...</p>
+        <div class="icon">GPU</div>
+        <p>Waiting for GPU data...</p>
     </div>
 
-    <!-- GPU Cards -->
-    <div class="cards-flow" v-if="filteredStats.length > 0">
-        <template v-for="(host, hi) in filteredStats">
-            <div v-if="host.status === 'error'" :key="host.hostname + '-err'"
-                 class="gpu-card" :style="{'border-left-color': '#e74c3c'}">
-                <div class="card-gpu-name">
-                    <span class="host-tag" :style="{background: hostColor(hi)}"></span>
-                    {{ host.hostname }}
-                </div>
-                <div class="error-card-inner" style="flex:1">{{ errorIcon(host.error) }} {{ host.error }}</div>
-            </div>
-            <div v-else v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index"
-                 class="gpu-card" :style="{'border-left-color': hostColor(hi)}">
-                <div class="card-gpu-name">
-                    <span class="host-tag" :style="{background: hostColor(hi)}"></span>
-                    <span class="gpu-idx">[{{ gpu.index }}]</span> {{ gpu.name || '-' }}
-                </div>
-                <div class="card-metrics">
-                    <div class="card-metric">
-                        <div class="val" :class="tempClass(gpu['temperature.gpu'])">{{ gpu['temperature.gpu'] || 0 }}°</div>
-                        <div class="lbl">温度</div>
+    <div class="section" v-if="filteredStats.length > 0">
+        <div class="cards-flow">
+            <template v-for="(host, hi) in filteredStats">
+                <div v-if="host.status === 'error'" :key="host.hostname + '-err'" class="gpu-card" :style="{'border-left-color': '#e74c3c'}">
+                    <div class="card-gpu-name">
+                        <span class="host-tag" :style="{background: hostColor(hi)}"></span>
+                        {{ host.hostname }}
                     </div>
-                    <div class="card-metric">
-                        <div class="val" :class="memClass(gpu.memory)">{{ gpu.memory || 0 }}%</div>
-                        <div class="lbl">显存</div>
+                    <div style="color:#e74c3c;font-size:13px">{{ host.error || 'Host unavailable' }}</div>
+                </div>
+                <div v-else v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index" class="gpu-card" :style="{'border-left-color': hostColor(hi)}">
+                    <div class="card-gpu-name">
+                        <span class="host-tag" :style="{background: hostColor(hi)}"></span>
+                        <span class="gpu-idx">[{{ gpu.index }}]</span> {{ gpu.name || '-' }}
                     </div>
-                    <div class="card-metric">
-                        <div class="val">{{ gpu['utilization.gpu'] || 0 }}%</div>
-                        <div class="lbl">利用率</div>
+                    <div class="card-metrics">
+                        <div class="card-metric">
+                            <div class="val" :class="tempClass(gpu['temperature.gpu'])">{{ gpu['temperature.gpu'] || 0 }}C</div>
+                            <div class="lbl">Temp</div>
+                        </div>
+                        <div class="card-metric">
+                            <div class="val" :class="memClass(gpu.memory)">{{ gpu.memory || 0 }}%</div>
+                            <div class="lbl">VRAM</div>
+                        </div>
+                        <div class="card-metric">
+                            <div class="val">{{ gpu['utilization.gpu'] || 0 }}%</div>
+                            <div class="lbl">Util</div>
+                        </div>
+                    </div>
+                    <div class="card-users">
+                        <template v-if="gpu.user_processes && gpu.user_processes !== '-'">{{ gpu.user_processes }}</template>
+                        <span v-else class="muted">No GPU processes</span>
                     </div>
                 </div>
-                <div class="card-users">
-                    <template v-if="gpu.user_processes && gpu.user_processes !== '-'">👤 {{ gpu.user_processes }}</template>
-                    <span v-else style="opacity:0.3">—</span>
-                </div>
-            </div>
-        </template>
+            </template>
+        </div>
     </div>
 
-    <div class="table-section" v-if="filteredStats.length > 0">
+    <div class="section" v-if="filteredStats.length > 0">
         <div class="table-wrapper">
             <table>
                 <thead>
                     <tr>
                         <th style="width:260px">GPU</th>
-                        <th style="text-align:center;width:210px">温度</th>
-                        <th style="text-align:center;width:210px">利用率</th>
-                        <th style="text-align:center;width:210px">显存 使用/总量</th>
-                        <th style="width:90px">可用</th>
-                        <th style="width:140px">功耗 使用/上限</th>
-                        <th>用户进程</th>
+                        <th style="width:130px">Temperature</th>
+                        <th style="width:130px">Utilization</th>
+                        <th style="width:260px">VRAM</th>
+                        <th style="width:150px">Power</th>
+                        <th>Users</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template v-for="(host, hi) in filteredStats">
-                        <tr class="host-separator" :style="{'--host-accent': hostColor(hi)}">
-                            <td colspan="7">
-                                <div style="display:flex;align-items:center">
-                                    <span class="sep-host-info">
-                                        <span class="host-tag" :style="{background: hostColor(hi)}"></span>
-                                        <span class="sep-name">{{ host.hostname }}</span>
-                                        <span class="sep-status" :class="host.status">{{ host.status === 'online' ? '正常' : '异常' }}</span>
-                                        <span v-if="host.status === 'online' && host.gpus" class="sep-gpu-count">{{ host.gpus.length }} GPUs</span>
-                                    </span>
-                                    <template v-if="host.status === 'online' && host.sys && host.sys.cpu_usage > 0">
-                                        <span class="sep-sys">CPU <strong>{{ host.sys.cpu_usage.toFixed(1) }}%</strong> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.cpu_usage + '%', background: host.sys.cpu_usage > 85 ? '#e74c3c' : host.sys.cpu_usage > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
-                                        <span class="sep-sys">内存 <span class="sys-mem-val">{{ fmtMemMB(host.sys.mem_used) }}/{{ fmtMemMB(host.sys.mem_total) }}</span> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.mem_percent + '%', background: host.sys.mem_percent > 85 ? '#e74c3c' : host.sys.mem_percent > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
-                                        <span class="sep-sys">负载 <strong>{{ host.sys.load_1.toFixed(2) }} / {{ host.sys.load_5.toFixed(2) }} / {{ host.sys.load_15.toFixed(2) }}</strong></span>
-                                    </template>
-                                    <span v-if="host.status === 'error'" style="color:#e74c3c;margin-left:8px">{{ errorIcon(host.error) }} {{ host.error }}</span>
-                                    <span v-if="host.status === 'online'" class="view-detail" @click="openModal(host, hi)">查看详情 →</span>
+                        <tr class="host-row">
+                            <td colspan="6">
+                                <div class="host-meta">
+                                    <span class="host-tag" :style="{background: hostColor(hi)}"></span>
+                                    <span>{{ host.hostname }}</span>
+                                    <span class="status" :class="host.status">{{ host.status }}</span>
+                                    <span v-if="host.status === 'online' && host.gpus" class="muted">{{ host.gpus.length }} GPUs</span>
+                                    <span v-if="host.status === 'online' && host.sys" class="muted">CPU {{ fmtPercent(host.sys.cpu_usage) }} · MEM {{ fmtMemMB(host.sys.mem_used) }}/{{ fmtMemMB(host.sys.mem_total) }} · Load {{ fmtLoad(host.sys.load_1) }}</span>
+                                    <span v-if="host.status === 'error'" style="color:#e74c3c">{{ host.error }}</span>
                                 </div>
                             </td>
                         </tr>
-                        <tr v-if="host.status === 'error'" class="error-row">
-                            <td colspan="7">{{ errorIcon(host.error) }} {{ host.error }}</td>
-                        </tr>
                         <tr v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index">
-                            <td>
-                                <span class="host-tag" :style="{background: hostColor(hi)}"></span>
-                                [{{ gpu.index }}] {{ gpu.name || '-' }}
-                            </td>
-                            <td style="color:var(--text-primary)">
-                                    <div class="sparkline-cell">
-                                        <span class="sparkline-val">{{ gpu['temperature.gpu'] != null ? gpu['temperature.gpu'] + '℃' : '-' }}</span>
-                                        <canvas class="sparkline" :id="'st_' + host.hostname + '_' + gpu.index"></canvas>
-                                    </div>
-                                </td>
-                            <td>
-                                    <div class="sparkline-cell">
-                                        <span class="sparkline-val">{{ gpu['utilization.gpu'] != null ? gpu['utilization.gpu'] + '%' : '-' }}</span>
-                                        <canvas class="sparkline" :id="'su_' + host.hostname + '_' + gpu.index"></canvas>
-                                    </div>
-                                </td>
+                            <td><span class="host-tag" :style="{background: hostColor(hi)}"></span> [{{ gpu.index }}] {{ gpu.name || '-' }}</td>
+                            <td :class="tempClass(gpu['temperature.gpu'])">{{ gpu['temperature.gpu'] || 0 }}C</td>
+                            <td>{{ gpu['utilization.gpu'] || 0 }}%</td>
                             <td :class="memClass(gpu.memory)">
-                                    <div class="sparkline-cell">
-                                        <span class="sparkline-val">{{ gpu.memory || '-' }}%<br><small style="opacity:0.6">{{ fmtGB(gpu['memory.used'] || 0) }}/{{ fmtGB(gpu['memory.total'] || 0) }}</small></span>
-                                        <span class="mem-bar"><span class="mem-bar-inner" :style="{width: (gpu.memory || 0) + '%', background: barColor(gpu.memory)}"></span></span>
-                                    </div>
-                                </td>
-                            <td>{{ (gpu['memory.total'] && gpu['memory.used'] != null) ? fmtGB(gpu['memory.total'] - gpu['memory.used']) : '-' }}</td>
-                            <td>{{ gpu['power.draw'] || '-' }} / {{ gpu['enforced.power.limit'] || '-' }}</td>
+                                {{ fmtGB(gpu['memory.used'] || 0) }} / {{ fmtGB(gpu['memory.total'] || 0) }} ({{ gpu.memory || 0 }}%)
+                                <span class="mem-bar"><span class="mem-bar-inner" :style="{width: (gpu.memory || 0) + '%', background: barColor(gpu.memory)}"></span></span>
+                            </td>
+                            <td>{{ gpu['power.draw'] || '-' }} / {{ gpu['enforced.power.limit'] || '-' }} W</td>
                             <td>{{ gpu.user_processes || '-' }}</td>
                         </tr>
                     </template>
@@ -326,41 +300,38 @@
         </div>
     </div>
 
-    <div class="charts-section">
+    <div class="charts-section" v-if="filteredStats.length > 0">
         <div class="chart-container">
-            <h3>用户显存使用</h3>
+            <h3>User VRAM Usage</h3>
             <div class="chart-box" id="barChart"></div>
         </div>
         <div class="chart-container">
-            <h3>GPU 显存使用量占比</h3>
+            <h3>GPU VRAM Share</h3>
             <div class="chart-box" id="pieChart"></div>
         </div>
     </div>
 
-    <div v-if="modalVisible" class="modal-overlay" @click.self="closeModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>
-                    <span class="host-tag" :style="{background: modalHostColor}"></span>
-                    {{ modalHost.hostname }}
-                </h2>
-                <button class="modal-close" @click="closeModal">&times;</button>
+    <div class="terminal-section">
+        <div class="terminal-panel">
+            <div class="terminal-toolbar">
+                <strong class="terminal-title" style="margin-bottom:0">Web Terminal</strong>
+                <select class="terminal-select" v-model="terminalHost" :disabled="terminalConnected">
+                    <option value="">Select host</option>
+                    <option v-for="h in hostOptions" :key="'term-' + h.hostname" :value="h.hostname">{{ h.name }}</option>
+                </select>
+                <button class="btn" @click="connectTerminal" :disabled="terminalConnected || !terminalHost">Connect</button>
+                <button class="btn danger" @click="disconnectTerminal" :disabled="!terminalConnected">Disconnect</button>
+                <button class="btn secondary" @click="clearTerminal">Clear</button>
+                <span class="terminal-status" :class="{connected: terminalConnected, error: terminalStatusType === 'error'}">{{ terminalStatus }}</span>
             </div>
-            <div class="modal-charts">
-                <div>
-                    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">用户显存排行</div>
-                    <div class="modal-chart-box" id="modalBarChart"></div>
-                </div>
-                <div>
-                    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">GPU 显存使用率</div>
-                    <div class="modal-chart-box" id="modalPieChart"></div>
-                </div>
-            </div>
+            <div class="terminal-box" ref="terminalBox"></div>
         </div>
     </div>
 
     <div class="footer">
-        {{ update_time }} &nbsp;|&nbsp; <a href="https://github.com/jysir99/gpubeat" target="_blank">GitHub</a> &nbsp;|&nbsp; GPUBeat &copy; 2025 &nbsp;|&nbsp; by <a href="https://github.com/jysir99" target="_blank">jysir99</a>
+        {{ update_time || 'No data yet' }} &nbsp;|&nbsp;
+        <a href="https://github.com/jysir99/gpubeat" target="_blank">GitHub</a> &nbsp;|&nbsp;
+        GPUBeat
     </div>
 </div>
 
@@ -381,18 +352,19 @@ new Vue({
         theme: 'light',
         timer: null,
         clockTimer: null,
-        progress: 0,
         progressTimer: null,
         barChart: null,
         pieChart: null,
-        modalBarChart: null,
-        modalPieChart: null,
-        modalVisible: false,
-        modalHost: {},
-        modalHostColor: '',
         barHash: '',
         pieHash: '',
-        historyData: {}
+        terminal: null,
+        terminalFit: null,
+        terminalSocket: null,
+        terminalHost: '',
+        terminalConnected: false,
+        terminalStatus: 'Disconnected',
+        terminalStatusType: '',
+        terminalResizeTimer: null
     },
     computed: {
         filteredStats: function() {
@@ -416,121 +388,40 @@ new Vue({
         this.startClock();
         this.fetchData();
         this.startAutoRefresh();
+        this.initTerminal();
         var self = this;
         window.addEventListener('resize', function() {
             if (self.barChart) self.barChart.resize();
             if (self.pieChart) self.pieChart.resize();
-            if (self.modalBarChart) self.modalBarChart.resize();
-            if (self.modalPieChart) self.modalPieChart.resize();
+            self.fitTerminal();
         });
     },
-    beforeDestroy: function() { this.stopAutoRefresh(); this.stopProgress(); this.stopClock(); },
+    beforeDestroy: function() {
+        this.stopAutoRefresh();
+        this.stopProgress();
+        this.stopClock();
+        this.disconnectTerminal();
+    },
     methods: {
         fmtMemMB: function(mb) {
-            if (!mb || mb <= 0) return "0 MB";
-            if (mb >= 1024) return (mb / 1024).toFixed(1) + " GB";
-            return Math.round(mb) + " MB";
+            if (!mb || mb <= 0) return '0 MB';
+            if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+            return Math.round(mb) + ' MB';
         },
         fmtGB: function(mb) {
             if (!mb && mb !== 0) return '-';
             return (mb / 1024).toFixed(2) + ' GB';
         },
+        fmtPercent: function(value) {
+            return value || value === 0 ? Number(value).toFixed(1) + '%' : '-';
+        },
+        fmtLoad: function(value) {
+            return value || value === 0 ? Number(value).toFixed(2) : '-';
+        },
         barColor: function(pct) {
             if (pct > 70) return '#e74c3c';
             if (pct > 30) return '#f39c12';
             return '#2ecc71';
-        },
-        startClock: function() {
-            var self = this;
-            function tick() {
-                var now = new Date();
-                var y = now.getFullYear();
-                var mo = String(now.getMonth() + 1).padStart(2, '0');
-                var d = String(now.getDate()).padStart(2, '0');
-                var h = String(now.getHours()).padStart(2, '0');
-                var mi = String(now.getMinutes()).padStart(2, '0');
-                var s = String(now.getSeconds()).padStart(2, '0');
-                self.currentDate = y + '-' + mo + '-' + d;
-                self.currentTime = h + ':' + mi + ':' + s;
-                self.refreshAgo = Math.floor((Date.now() - self.lastFetchTime) / 1000);
-            }
-            tick();
-            this.clockTimer = setInterval(tick, 1000);
-        },
-        stopClock: function() {
-            if (this.clockTimer) { clearInterval(this.clockTimer); this.clockTimer = null; }
-        },
-        fetchData: function() {
-            var self = this;
-            this.stopProgress();
-            this.progress = 0;
-            if (self.$refs.progressRing) {
-                self.$refs.progressRing.style.strokeDashoffset = '43.98';
-            }
-            requestAnimationFrame(function() {
-                self.startProgress();
-            });
-            fetch('/api/gpustats')
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    self.gpustats = data.gpustats || [];
-                    self.update_time = data.update_time || '';
-                    self.lastFetchTime = Date.now();
-                    self.recordHistory();
-                    self.$nextTick(function() {
-                        setTimeout(function() { self.updateSparklines(); }, 50);
-                    });
-                    setTimeout(function() { self.updateCharts(); }, 100);
-                })
-                .catch(function(err) { console.error('Fetch error:', err); });
-        },
-        startProgress: function() {
-            this.stopProgress();
-            var self = this;
-            var ring = this.$refs.progressRing;
-            var circumference = 43.98;
-            var startTime = null;
-            var duration = self.refreshInterval * 1000;
-            function tick(ts) {
-                if (!startTime) startTime = ts;
-                var elapsed = ts - startTime;
-                var pct = Math.min(100, (elapsed / duration) * 100);
-                self.progress = pct;
-                if (ring) ring.style.strokeDashoffset = circumference * (1 - pct / 100);
-                if (elapsed < duration) {
-                    self.progressTimer = requestAnimationFrame(tick);
-                }
-            }
-            self.progressTimer = requestAnimationFrame(tick);
-        },
-        stopProgress: function() {
-            if (this.progressTimer) { cancelAnimationFrame(this.progressTimer); clearInterval(this.progressTimer); this.progressTimer = null; }
-        },
-        startAutoRefresh: function() {
-            this.stopAutoRefresh();
-            var self = this;
-            this.timer = setInterval(function() { self.fetchData(); }, self.refreshInterval * 1000);
-        },
-        stopAutoRefresh: function() {
-            if (this.timer) { clearInterval(this.timer); this.timer = null; }
-        },
-        toggleTheme: function() {
-            this.theme = this.theme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', this.theme);
-            localStorage.setItem('gpu-theme', this.theme);
-            this.barHash = '';
-            this.pieHash = '';
-            var self = this;
-            this.$nextTick(function() {
-                setTimeout(function() { self.updateCharts(); }, 50);
-            });
-        },
-        hostColor: function(index) { return HOST_COLORS[index % HOST_COLORS.length]; },
-        hostColorByName: function(hostname) {
-            for (var i = 0; i < this.gpustats.length; i++) {
-                if (this.gpustats[i].hostname === hostname) return this.hostColor(i);
-            }
-            return HOST_COLORS[0];
         },
         tempClass: function(t) {
             if (!t) return '';
@@ -543,14 +434,94 @@ new Vue({
             if (pct > 30) return 'mem-mid';
             return 'mem-low';
         },
-        errorIcon: function(err) {
-            if (!err) return '⚠';
-            if (err.indexOf('SSH连接失败') === 0) return '🔌';
-            if (err.indexOf('SSH认证失败') === 0) return '🔑';
-            if (err.indexOf('nvidia-smi未安装') === 0) return '⚙';
-            if (err.indexOf('nvidia-smi执行失败') === 0) return '💻';
-            if (err.indexOf('数据解析异常') === 0) return '📊';
-            return '⚠';
+        hostColor: function(index) {
+            return HOST_COLORS[index % HOST_COLORS.length];
+        },
+        hostColorByName: function(hostname) {
+            for (var i = 0; i < this.gpustats.length; i++) {
+                if (this.gpustats[i].hostname === hostname) return this.hostColor(i);
+            }
+            return HOST_COLORS[0];
+        },
+        startClock: function() {
+            var self = this;
+            function tick() {
+                var now = new Date();
+                self.currentDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                self.currentTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
+                self.refreshAgo = Math.floor((Date.now() - self.lastFetchTime) / 1000);
+            }
+            tick();
+            this.clockTimer = setInterval(tick, 1000);
+        },
+        stopClock: function() {
+            if (this.clockTimer) {
+                clearInterval(this.clockTimer);
+                this.clockTimer = null;
+            }
+        },
+        fetchData: function() {
+            var self = this;
+            this.stopProgress();
+            if (self.$refs.progressRing) {
+                self.$refs.progressRing.style.strokeDashoffset = '43.98';
+            }
+            requestAnimationFrame(function() { self.startProgress(); });
+            fetch('/api/gpustats')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    self.gpustats = data.gpustats || [];
+                    self.update_time = data.update_time || '';
+                    self.lastFetchTime = Date.now();
+                    if (!self.terminalHost && self.gpustats.length > 0) {
+                        self.terminalHost = self.gpustats[0].hostname;
+                    }
+                    self.$nextTick(function() {
+                        self.updateCharts();
+                        self.fitTerminal();
+                    });
+                })
+                .catch(function(err) {
+                    console.error(err);
+                    self.terminalStatus = 'Data refresh failed';
+                    self.terminalStatusType = 'error';
+                });
+        },
+        startAutoRefresh: function() {
+            this.stopAutoRefresh();
+            var self = this;
+            this.timer = setInterval(function() { self.fetchData(); }, Math.max(1, this.refreshInterval) * 1000);
+        },
+        stopAutoRefresh: function() {
+            if (this.timer) {
+                clearInterval(this.timer);
+                this.timer = null;
+            }
+        },
+        startProgress: function() {
+            var self = this;
+            var start = Date.now();
+            var total = Math.max(1, this.refreshInterval) * 1000;
+            this.progressTimer = setInterval(function() {
+                var pct = Math.min((Date.now() - start) / total, 1);
+                if (self.$refs.progressRing) {
+                    self.$refs.progressRing.style.strokeDashoffset = String(43.98 * (1 - pct));
+                }
+            }, 100);
+        },
+        stopProgress: function() {
+            if (this.progressTimer) {
+                clearInterval(this.progressTimer);
+                this.progressTimer = null;
+            }
+        },
+        toggleTheme: function() {
+            this.theme = this.theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', this.theme);
+            localStorage.setItem('gpu-theme', this.theme);
+            this.barHash = '';
+            this.pieHash = '';
+            this.updateCharts();
         },
         chartTextColor: function() {
             return this.theme === 'dark' ? '#a0b4c4' : '#636e72';
@@ -558,135 +529,15 @@ new Vue({
         chartLineColor: function() {
             return this.theme === 'dark' ? '#3d5570' : '#e0e0e0';
         },
-        openModal: function(host, hi) {
-            this.modalHost = host;
-            this.modalHostColor = this.hostColor(hi);
-            this.modalVisible = true;
-            var self = this;
-            this.$nextTick(function() {
-                setTimeout(function() { self.updateModalCharts(host, hi); }, 150);
-            });
+        updateCharts: function() {
+            this.updateBarChart();
+            this.updatePieChart();
         },
-        closeModal: function() {
-            this.modalVisible = false;
-            if (this.modalBarChart) { this.modalBarChart.dispose(); this.modalBarChart = null; }
-            if (this.modalPieChart) { this.modalPieChart.dispose(); this.modalPieChart = null; }
-        },
-
-        recordHistory: function() {
-            var self = this;
-            var now = new Date();
-            var ts = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' + (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
-            this.gpustats.forEach(function(host) {
-                if (host.status !== 'online') return;
-                (host.gpus || []).forEach(function(gpu) {
-                    var key = host.hostname + '_' + gpu.index;
-                    if (!self.historyData[key]) {
-                        self.historyData[key] = { temp: [], util: [], mem: [] };
-                    }
-                    self.historyData[key].temp.push({ t: ts, v: gpu['temperature.gpu'] != null ? gpu['temperature.gpu'] : 0 });
-                    self.historyData[key].util.push({ t: ts, v: gpu['utilization.gpu'] != null ? gpu['utilization.gpu'] : 0 });
-                    self.historyData[key].mem.push({ t: ts, v: gpu.memory != null ? gpu.memory : 0 });
-                    if (self.historyData[key].temp.length > 30) self.historyData[key].temp.shift();
-                    if (self.historyData[key].util.length > 30) self.historyData[key].util.shift();
-                    if (self.historyData[key].mem.length > 30) self.historyData[key].mem.shift();
-                });
-            });
-        },
-        updateSparklines: function() {
-            var self = this;
-            var tempColor = '#e74c3c';
-            var utilColor = '#9b59b6';
-            var memColor = '#3498db';
-            this.filteredStats.forEach(function(host) {
-                if (host.status !== 'online') return;
-                (host.gpus || []).forEach(function(gpu) {
-                    var key = host.hostname + '_' + gpu.index;
-                    var hist = self.historyData[key];
-                    if (!hist || hist.temp.length < 1) return;
-                    var tc = document.getElementById('st_' + key);
-                    var uc = document.getElementById('su_' + key);
-                    var mc = document.getElementById('sm_' + key);
-                    if (tc) self.drawSpark(tc, hist.temp, tempColor, true);
-                    if (uc) self.drawSpark(uc, hist.util, utilColor, false);
-                });
-            });
-        },
-        drawSpark: function(canvas, data, color, colorByValue) {
-            if (!canvas) return;
-            var dpr = window.devicePixelRatio || 1;
-            var rect = canvas.getBoundingClientRect();
-            if (rect.width < 1 || rect.height < 1) return;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            var ctx = canvas.getContext('2d');
-            var w = canvas.width;
-            var h = canvas.height;
-            ctx.clearRect(0, 0, w, h);
-            var vals = data.map(function(d) { return d.v; });
-            if (vals.length < 1) return;
-            var yMin = 0;
-            var yMax = 100;
-            var stepX = vals.length > 1 ? (w - 4) / (vals.length - 1) : 0;
-            var padX = 2;
-            function toY(v) { return h - 4 - ((v - yMin) / (yMax - yMin)) * (h - 8); }
-            function toX(i) { return padX + i * stepX; }
-
-            function valColor(v) {
-                if (!colorByValue) return color;
-                if (v >= 80) return '#e74c3c';
-                if (v >= 60) return '#f39c12';
-                if (v >= 40) return '#f1c40f';
-                return '#2ecc71';
-            }
-
-            if (colorByValue) {
-                for (var i = 0; i < vals.length - 1; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(toX(i), toY(vals[i]));
-                    ctx.lineTo(toX(i + 1), toY(vals[i + 1]));
-                    ctx.strokeStyle = valColor((vals[i] + vals[i + 1]) / 2);
-                    ctx.lineWidth = 2;
-                    ctx.lineJoin = 'round';
-                    ctx.stroke();
-                }
-            } else {
-                ctx.beginPath();
-                ctx.moveTo(toX(0), toY(vals[0]));
-                for (var i = 1; i < vals.length; i++) {
-                    ctx.lineTo(toX(i), toY(vals[i]));
-                }
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 2;
-                ctx.lineJoin = 'round';
-                ctx.stroke();
-            }
-
-            ctx.beginPath();
-            ctx.moveTo(toX(0), toY(vals[0]));
-            for (var i = 1; i < vals.length; i++) {
-                ctx.lineTo(toX(i), toY(vals[i]));
-            }
-            ctx.lineTo(toX(vals.length - 1), h);
-            ctx.lineTo(toX(0), h);
-            ctx.closePath();
-            var lastVal = vals[vals.length - 1];
-            var fillBase = colorByValue ? valColor(lastVal) : color;
-            var grad = ctx.createLinearGradient(0, 0, 0, h);
-            grad.addColorStop(0, fillBase + '25');
-            grad.addColorStop(1, fillBase + '03');
-            ctx.fillStyle = grad;
-            ctx.fill();
-        },
-        updateCharts: function() { this.updateBarChart(); this.updatePieChart(); },
-
         updateBarChart: function() {
             var el = document.getElementById('barChart');
             if (!el) return;
-
             var userData = {};
             var hostOrder = [];
-            var self = this;
             this.filteredStats.forEach(function(host) {
                 if (host.status === 'error') return;
                 hostOrder.push(host.hostname);
@@ -699,334 +550,179 @@ new Vue({
                     });
                 });
             });
-
             var users = Object.keys(userData).sort(function(a, b) {
                 var ta = 0, tb = 0;
-                for (var k in userData[a]) ta += userData[a][k];
-                for (var k in userData[b]) tb += userData[b][k];
+                Object.keys(userData[a]).forEach(function(k) { ta += userData[a][k]; });
+                Object.keys(userData[b]).forEach(function(k) { tb += userData[b][k]; });
                 return tb - ta;
             });
-
-            var hash = JSON.stringify({u: users, h: hostOrder, d: userData});
+            var hash = JSON.stringify({users: users, hosts: hostOrder, data: userData, theme: this.theme});
             if (hash === this.barHash && this.barChart) return;
             this.barHash = hash;
-
             if (!this.barChart) this.barChart = echarts.init(el);
-
             if (users.length === 0) {
                 this.barChart.clear();
-                this.barChart.setOption({ title: { text: '暂无进程数据', left: 'center', top: 'center', textStyle: { color: '#7f8c8d', fontSize: 14 } } }, true);
+                this.barChart.setOption({ title: { text: 'No process data', left: 'center', top: 'center', textStyle: { color: this.chartTextColor(), fontSize: 14 } } }, true);
                 return;
             }
-
+            var self = this;
             var series = hostOrder.map(function(h) {
                 return {
-                    name: h, type: 'bar', stack: 'mem',
+                    name: h,
+                    type: 'bar',
+                    stack: 'mem',
                     data: users.map(function(u) { return ((userData[u][h] || 0) / 1024).toFixed(2); }),
-                    itemStyle: { color: self.hostColorByName(h) },
-                    emphasis: { focus: 'series' }
+                    itemStyle: { color: self.hostColorByName(h) }
                 };
             });
-
             this.barChart.setOption({
-                title: { show: false },
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: function(params) {
-                    var total = 0;
-                    var lines = [];
-                    params.forEach(function(p) {
-                        if (parseFloat(p.value) > 0) {
-                            total += parseFloat(p.value);
-                            lines.push(p.marker + ' ' + p.seriesName + ': ' + p.value + ' GB');
-                        }
-                    });
-                    if (lines.length === 0) return null;
-                    lines.push('<b>合计: ' + total.toFixed(2) + ' GB</b>');
-                    return '<b>' + params[0].name + '</b><br>' + lines.join('<br>');
-                }},
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
                 legend: { top: 0, textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll' },
-                grid: { left: 80, right: 20, top: 36, bottom: 80 },
-                xAxis: { type: 'category', data: users, axisLabel: { color: self.chartTextColor(), rotate: 45, fontSize: 11, width: 80, overflow: 'truncate', ellipsis: '...' } },
+                grid: { left: 70, right: 20, top: 36, bottom: 80 },
+                xAxis: { type: 'category', data: users, axisLabel: { color: self.chartTextColor(), rotate: 45, fontSize: 11 } },
                 yAxis: { type: 'value', name: 'GB', nameTextStyle: { color: self.chartTextColor() }, axisLabel: { color: self.chartTextColor() }, splitLine: { lineStyle: { color: self.chartLineColor() } } },
                 series: series
-            });
+            }, true);
         },
-
         updatePieChart: function() {
             var el = document.getElementById('pieChart');
             if (!el) return;
             var self = this;
-
-            function fmtMem(mb) {
-                if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
-                return Math.round(mb) + ' MB';
-            }
-
-            var innerData = [];
-            var outerData = [];
-            var legendNames = [];
-
+            var data = [];
             this.filteredStats.forEach(function(host, hi) {
                 if (host.status === 'error') return;
-                var color = self.hostColor(hi);
                 (host.gpus || []).forEach(function(gpu) {
-                    var used = gpu['memory.used'] || 0;
-                    var total = gpu['memory.total'] || 0;
-                    var free = total - used;
-                    var name = host.hostname + ' [' + gpu.index + ']';
-                    legendNames.push(name);
-
-                    innerData.push({
-                        name: name,
-                        value: used,
-                        itemStyle: { color: color },
-                        _total: total,
-                        _used: used
-                    });
-                    if (free > 0) {
-                        innerData.push({
-                            name: name + '_free',
-                            value: free,
-                            itemStyle: { color: color, opacity: 0.08 },
-                            label: { show: false },
-                            labelLine: { show: false },
-                            emphasis: { disabled: true },
-                            tooltip: { show: false }
-                        });
-                    }
-
-                    outerData.push({
-                        name: name,
-                        value: total,
-                        itemStyle: { color: color, opacity: 0.3 }
+                    data.push({
+                        name: host.hostname + ' GPU ' + gpu.index,
+                        value: gpu['memory.used'] || 0,
+                        itemStyle: { color: self.hostColor(hi) }
                     });
                 });
             });
-
-            var hash = JSON.stringify({i: innerData, o: outerData});
+            var hash = JSON.stringify({data: data, theme: this.theme});
             if (hash === this.pieHash && this.pieChart) return;
             this.pieHash = hash;
-
             if (!this.pieChart) this.pieChart = echarts.init(el);
-
-            if (innerData.length === 0) {
+            if (data.length === 0) {
                 this.pieChart.clear();
-                this.pieChart.setOption({ title: { text: '暂无GPU数据', left: 'center', top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 14 } } }, true);
+                this.pieChart.setOption({ title: { text: 'No GPU data', left: 'center', top: 'center', textStyle: { color: this.chartTextColor(), fontSize: 14 } } }, true);
                 return;
             }
-
-            var totalUsed = 0, totalAll = 0;
-            this.filteredStats.forEach(function(host) {
-                if (host.status !== 'online') return;
-                (host.gpus || []).forEach(function(gpu) {
-                    totalUsed += gpu['memory.used'] || 0;
-                    totalAll += gpu['memory.total'] || 0;
-                });
-            });
-            var centerUsed = Math.round(totalUsed / 1024);
-            var centerTotal = Math.round(totalAll / 1024);
-
             this.pieChart.setOption({
-                title: { show: false },
-                graphic: [{
-                    type: 'text',
-                    left: '36.5%',
-                    top: 'middle',
-                    style: {
-                        text: centerUsed + ' / ' + centerTotal + ' GB',
-                        fill: self.chartTextColor(),
-                        fontSize: 12,
-                        fontWeight: 'bold',
-                        textAlign: 'center',
-                        textVerticalAlign: 'middle'
-                    }
-                }],
-                tooltip: { trigger: 'item', formatter: function(p) {
-                    if (!p.data._used && p.data._used !== 0) return null;
-                    var total = p.data._total || 0;
-                    var used = p.data._used || 0;
-                    var pct = total > 0 ? (used / total * 100).toFixed(1) : 0;
-                    return p.name + '<br>已用: ' + fmtMem(used) + ' / ' + fmtMem(total) + ' (' + pct + '%)';
-                }},
-                legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll', data: legendNames },
+                tooltip: { trigger: 'item', formatter: function(p) { return p.name + '<br>' + (p.value / 1024).toFixed(2) + ' GB'; } },
+                legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll' },
                 series: [{
                     type: 'pie',
-                    radius: ['35%', '58%'],
+                    radius: ['42%', '70%'],
                     center: ['40%', '50%'],
-                    label: {
-                        color: self.chartTextColor(),
-                        fontSize: 11,
-                        formatter: function(p) {
-                            if (p.data._used === undefined) return '';
-                            return p.name + '\n' + fmtMem(p.data._used);
-                        }
-                    },
-                    labelLine: { length: 18, length2: 30, smooth: true },
-                    labelLayout: { hideOverlap: true },
-                    emphasis: { label: { fontSize: 12, fontWeight: 'bold' } },
-                    itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.25)', borderWidth: 2 },
-                    data: innerData
-                }, {
-                    type: 'pie',
-                    radius: ['63%', '73%'],
-                    center: ['40%', '50%'],
-                    silent: true,
-                    label: { show: false },
-                    labelLine: { show: false },
-                    tooltip: { show: false },
-                    itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.2)', borderWidth: 2 },
-                    data: outerData
+                    label: { color: self.chartTextColor(), fontSize: 11 },
+                    data: data
                 }]
-            });
-
-            if (!this._pieLegendBound) {
-                this._pieLegendBound = true;
-                this.pieChart.on('legendselectchanged', function(params) {
-                    var sel = params.selected;
-                    var newData = innerData.map(function(d) {
-                        if (d._used !== undefined) return d;
-                        var base = d.name.replace('_free', '');
-                        if (sel[base] === false) {
-                            return Object.assign({}, d, { value: 0 });
-                        }
-                        return d;
-                    });
-                    self.pieChart.setOption({ series: [{ data: newData }] });
-                });
-            }
+            }, true);
         },
-
-        updateModalCharts: function(host, hi) {
-            var color = this.hostColor(hi);
-            var barEl = document.getElementById('modalBarChart');
-            if (barEl) {
-                var userMem = {};
-                (host.gpus || []).forEach(function(gpu) {
-                    (gpu.processes || []).forEach(function(proc) {
-                        var u = proc.username;
-                        if (!u || u === 'unknown' || u === 'root') return;
-                        userMem[u] = (userMem[u] || 0) + proc.gpu_memory_usage;
-                    });
-                });
-                var users = Object.keys(userMem).sort(function(a, b) { return userMem[b] - userMem[a]; });
-                var values = users.map(function(u) { return (userMem[u] / 1024).toFixed(2); });
-
-                if (this.modalBarChart) { this.modalBarChart.dispose(); this.modalBarChart = null; }
-                this.modalBarChart = echarts.init(barEl);
-                var self = this;
-                if (users.length > 0) {
-                    this.modalBarChart.setOption({
-                        tooltip: { trigger: 'axis', formatter: '{b}: {c} GB' },
-                        grid: { left: 80, right: 20, top: 10, bottom: 60 },
-                        xAxis: { type: 'category', data: users, axisLabel: { color: self.chartTextColor(), rotate: 45, fontSize: 11, width: 80, overflow: 'truncate', ellipsis: '...' } },
-                        yAxis: { type: 'value', name: 'GB', nameTextStyle: { color: self.chartTextColor() }, axisLabel: { color: self.chartTextColor() }, splitLine: { lineStyle: { color: self.chartLineColor() } } },
-                        series: [{ type: 'bar', data: values, itemStyle: { color: color, borderRadius: [4,4,0,0] } }]
-                    }, true);
-                } else {
-                    this.modalBarChart.setOption({ title: { text: '暂无进程', left: 'center', top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 14 } } }, true);
+        initTerminal: function() {
+            if (!window.Terminal || !this.$refs.terminalBox) {
+                this.terminalStatus = 'Terminal assets failed to load';
+                this.terminalStatusType = 'error';
+                return;
+            }
+            this.terminalFit = new FitAddon.FitAddon();
+            this.terminal = new Terminal({
+                cursorBlink: true,
+                convertEol: true,
+                fontFamily: 'Consolas, "Cascadia Mono", monospace',
+                fontSize: 13,
+                theme: { background: '#0f1720', foreground: '#d6e2ee' }
+            });
+            this.terminal.loadAddon(this.terminalFit);
+            this.terminal.open(this.$refs.terminalBox);
+            this.terminal.writeln('GPUBeat terminal ready. Select a host and connect.');
+            var self = this;
+            this.terminal.onData(function(data) {
+                if (self.terminalSocket && self.terminalSocket.readyState === WebSocket.OPEN) {
+                    self.terminalSocket.send(JSON.stringify({ type: 'input', data: data }));
                 }
+            });
+            this.fitTerminal();
+        },
+        fitTerminal: function() {
+            var self = this;
+            clearTimeout(this.terminalResizeTimer);
+            this.terminalResizeTimer = setTimeout(function() {
+                if (!self.terminalFit || !self.terminal) return;
+                self.terminalFit.fit();
+                if (self.terminalSocket && self.terminalSocket.readyState === WebSocket.OPEN) {
+                    self.terminalSocket.send(JSON.stringify({ type: 'resize', cols: self.terminal.cols, rows: self.terminal.rows }));
+                }
+            }, 80);
+        },
+        connectTerminal: function() {
+            if (!this.terminal || !this.terminalHost || this.terminalConnected) return;
+            var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            var url = protocol + window.location.host + '/api/terminal?host=' + encodeURIComponent(this.terminalHost) + '&cols=' + this.terminal.cols + '&rows=' + this.terminal.rows;
+            var self = this;
+            this.terminalStatus = 'Connecting to ' + this.terminalHost + '...';
+            this.terminalStatusType = '';
+            this.terminalSocket = new WebSocket(url);
+            this.terminalSocket.onopen = function() {
+                self.terminalConnected = true;
+                self.terminalStatus = 'Connected to ' + self.terminalHost;
+                self.terminalStatusType = '';
+                self.terminal.writeln('\r\nConnected to ' + self.terminalHost);
+                self.fitTerminal();
+            };
+            this.terminalSocket.onmessage = function(event) {
+                var msg;
+                try {
+                    msg = JSON.parse(event.data);
+                } catch (err) {
+                    self.terminal.write(event.data);
+                    return;
+                }
+                if (msg.type === 'output') {
+                    self.terminal.write(msg.data || '');
+                } else if (msg.type === 'error') {
+                    self.terminal.writeln('\r\n' + (msg.data || 'Terminal error'));
+                    self.terminalStatus = msg.data || 'Terminal error';
+                    self.terminalStatusType = 'error';
+                } else if (msg.type === 'close') {
+                    self.terminal.writeln('\r\nSession closed.');
+                }
+            };
+            this.terminalSocket.onerror = function() {
+                self.terminalStatus = 'Connection failed. Check server.terminal.enabled.';
+                self.terminalStatusType = 'error';
+            };
+            this.terminalSocket.onclose = function() {
+                self.terminalConnected = false;
+                if (self.terminalStatusType !== 'error') {
+                    self.terminalStatus = 'Disconnected';
+                }
+            };
+        },
+        disconnectTerminal: function() {
+            if (this.terminalSocket) {
+                if (this.terminalSocket.readyState === WebSocket.OPEN) {
+                    this.terminalSocket.send(JSON.stringify({ type: 'close' }));
+                }
+                this.terminalSocket.close();
+                this.terminalSocket = null;
             }
-
-            var pieEl = document.getElementById('modalPieChart');
-            if (pieEl) {
-                var gpuColors = ['#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#e84393', '#e74c3c'];
-                var innerData = [];
-                var outerData = [];
-                var legendNames = [];
-                var mTotalUsed = 0, mTotalAll = 0;
-                (host.gpus || []).forEach(function(gpu, gi) {
-                    var used = gpu['memory.used'] || 0;
-                    var total = gpu['memory.total'] || 0;
-                    var free = total - used;
-                    mTotalUsed += used;
-                    mTotalAll += total;
-                    var c = gpuColors[gi % gpuColors.length];
-                    var name = 'GPU ' + gpu.index;
-                    legendNames.push(name);
-
-                    innerData.push({
-                        name: name,
-                        value: used,
-                        itemStyle: { color: c },
-                        _total: total,
-                        _used: used
-                    });
-                    if (free > 0) {
-                        innerData.push({
-                            name: name + '_free',
-                            value: free,
-                            itemStyle: { color: c, opacity: 0.08 },
-                            label: { show: false },
-                            labelLine: { show: false },
-                            emphasis: { disabled: true },
-                            tooltip: { show: false }
-                        });
-                    }
-                    outerData.push({
-                        name: name,
-                        value: total,
-                        itemStyle: { color: c, opacity: 0.3 }
-                    });
-                });
-                if (this.modalPieChart) { this.modalPieChart.dispose(); this.modalPieChart = null; }
-                this.modalPieChart = echarts.init(pieEl);
-                this.modalPieChart.setOption({
-                    graphic: [{
-                        type: 'text',
-                        left: '36.5%',
-                        top: 'middle',
-                        style: {
-                            text: Math.round(mTotalUsed / 1024) + ' / ' + Math.round(mTotalAll / 1024) + ' GB',
-                            fill: self.chartTextColor(),
-                            fontSize: 12,
-                            fontWeight: 'bold',
-                            textAlign: 'center',
-                            textVerticalAlign: 'middle'
-                        }
-                    }],
-                    tooltip: { trigger: 'item', formatter: function(p) {
-                        if (!p.data._used && p.data._used !== 0) return null;
-                        var total = p.data._total || 0;
-                        var used = p.data._used || 0;
-                        var pct = total > 0 ? (used / total * 100).toFixed(1) : 0;
-                        return p.name + '<br>已用: ' + Math.round(used) + ' / ' + Math.round(total) + ' MiB (' + pct + '%)';
-                    }},
-                    legend: { orient: 'vertical', right: 0, top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll', data: legendNames },
-                    series: [{
-                        type: 'pie', radius: ['35%', '58%'], center: ['40%', '50%'],
-                        label: {
-                            color: self.chartTextColor(), fontSize: 11,
-                            formatter: function(p) {
-                                if (p.data._used === undefined) return '';
-                                return p.name + '\n' + Math.round(p.data._used) + ' MiB';
-                            }
-                        },
-                        labelLine: { length: 18, length2: 30, smooth: true },
-                        labelLayout: { hideOverlap: true },
-                        emphasis: { label: { fontSize: 12, fontWeight: 'bold' } },
-                        itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.25)', borderWidth: 2 },
-                        data: innerData
-                    }, {
-                        type: 'pie', radius: ['63%', '73%'], center: ['40%', '50%'],
-                        silent: true,
-                        label: { show: false },
-                        labelLine: { show: false },
-                        tooltip: { show: false },
-                        itemStyle: { borderColor: self.theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.2)', borderWidth: 2 },
-                        data: outerData
-                    }]
-                }, true);
-            }
+            this.terminalConnected = false;
+        },
+        clearTerminal: function() {
+            if (this.terminal) this.terminal.clear();
         }
     },
     watch: {
-        refreshInterval: function() { this.startAutoRefresh(); },
+        refreshInterval: function() {
+            this.startAutoRefresh();
+        },
         selectedHost: function() {
             this.barHash = '';
             this.pieHash = '';
             var self = this;
-            this.$nextTick(function() {
-                setTimeout(function() { self.updateSparklines(); self.updateCharts(); }, 100);
-            });
+            this.$nextTick(function() { self.updateCharts(); });
         }
     }
 });

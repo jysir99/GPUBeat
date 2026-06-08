@@ -2,7 +2,9 @@ server:
   host: "0.0.0.0"
   port: 9988
   refresh: 3
-  privacy: false  # 隐私模式: 将实际用户名替换为 user1, user2 等
+  privacy: false
+  terminal:
+    enabled: false  # Set true to enable browser SSH terminals for configured hosts.
 
 hosts:
   - name: "gpu-server-1"
