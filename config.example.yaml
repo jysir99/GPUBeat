@@ -13,9 +13,15 @@ hosts:
     port: 22
     username: "root"
     password: "your-password"
+    provider: "Tencent Cloud"
+    region: "ap-guangzhou"
+    notes: "GPU or general Linux host monitored over SSH"
 
   # - name: "gpu-server-2"
   #   host: "192.168.1.101"
   #   port: 22
   #   username: "user"
   #   password: "password"
+  #   provider: "Aliyun"
+  #   region: "cn-shanghai"
+  #   notes: "No GPU is also supported"

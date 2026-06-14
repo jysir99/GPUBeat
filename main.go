@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const nvidiaSMICmd = `nvidia-smi --query-gpu=index,gpu_bus_id,name,temperature.gpu,utilization.gpu,memory.used,memory.total,utilization.memory,power.draw,enforced.power.limit --format=csv,noheader,nounits && echo "===PROCESSES===" && (nvidia-smi --query-compute-apps=gpu_bus_id,pid,process_name,used_gpu_memory --format=csv,noheader 2>/dev/null || echo "") && echo "===USERS===" && ps -eo user:30,pid --no-headers 2>/dev/null && echo "===SYSINFO===" && echo "CPU:$(top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}')" && echo "MEM:$(awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{u=t-a;if(t>0)printf "%.0f/%.0f/%.0f",u/1024,t/1024,u/t*100}' /proc/meminfo)" && echo "LOAD:$(awk '{print $1,$2,$3}' /proc/loadavg)"`
+const monitorCmd = `printf "===SYSINFO===\n"; echo "CPU:$(top -bn1 2>/dev/null | grep 'Cpu(s)' | awk '{print $2+$4}')"; echo "MEM:$(awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{u=t-a;if(t>0)printf "%.0f/%.0f/%.0f",u/1024,t/1024,u/t*100}' /proc/meminfo 2>/dev/null)"; echo "LOAD:$(awk '{print $1,$2,$3}' /proc/loadavg 2>/dev/null)"; printf "===DISKS===\n"; df -Pm -x tmpfs -x devtmpfs 2>/dev/null | awk 'NR>1 {print $6","$2","$3","$5}'; printf "===NET===\n"; awk -F'[: ]+' 'NR>2 {rx+=$3; tx+=$11} END{printf "RX:%.0f\nTX:%.0f\n",rx,tx}' /proc/net/dev 2>/dev/null; printf "===GPU===\n"; if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=index,gpu_bus_id,name,temperature.gpu,utilization.gpu,memory.used,memory.total,utilization.memory,power.draw,enforced.power.limit --format=csv,noheader,nounits 2>/dev/null || true; fi; printf "===PROCESSES===\n"; if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-compute-apps=gpu_bus_id,pid,process_name,used_gpu_memory --format=csv,noheader 2>/dev/null || true; fi; printf "===USERS===\n"; ps -eo user:30,pid --no-headers 2>/dev/null || true`
 
 func getExeDir() string {
 	exe, err := os.Executable()
@@ -26,7 +26,7 @@ func getExeDir() string {
 func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, wg *sync.WaitGroup, results chan<- *HostGPUData) {
 	defer wg.Done()
 	start := time.Now()
-	output, err := pool.ExecuteCommand(hostCfg.Host, hostCfg.Port, hostCfg.Username, hostCfg.Password, nvidiaSMICmd)
+	output, err := pool.ExecuteCommand(hostCfg.Host, hostCfg.Port, hostCfg.Username, hostCfg.Password, monitorCmd)
 	elapsed := time.Since(start)
 	if ctx.Err() != nil {
 		return
@@ -36,20 +36,28 @@ func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, 
 		results <- &HostGPUData{
 			Hostname: hostCfg.Name,
 			Host:     hostCfg.Host,
+			Provider: hostCfg.Provider,
+			Region:   hostCfg.Region,
+			Notes:    hostCfg.Notes,
 			Status:   "error",
 			Error:    err.Error(),
 			GPUs:     []GPUInfo{},
+			Disks:    []DiskInfo{},
 			Order:    idx,
 		}
 		return
 	}
 	data := ParseGPUData(output, hostCfg.Name, hostCfg.Host)
+	data.Provider = hostCfg.Provider
+	data.Region = hostCfg.Region
+	data.Notes = hostCfg.Notes
 	data.Order = idx
 	log.Printf("[refresh] %s (%s) ok after %v, %d GPUs", hostCfg.Name, hostCfg.Host, elapsed, len(data.GPUs))
 	results <- data
 }
 
-func backgroundRefresh(ctx context.Context, cfg *Config, logger *Logger, pool *SSHPool) {
+func backgroundRefresh(ctx context.Context, store *ConfigStore, logger *Logger, pool *SSHPool, activity *ActivityLog, refreshNow <-chan struct{}) {
+	hostStatus := make(map[string]string)
 	for {
 		select {
 		case <-ctx.Done():
@@ -57,6 +65,7 @@ func backgroundRefresh(ctx context.Context, cfg *Config, logger *Logger, pool *S
 		default:
 		}
 
+		cfg := store.Snapshot()
 		start := time.Now()
 		var wg sync.WaitGroup
 		results := make(chan *HostGPUData, len(cfg.Hosts))
@@ -83,10 +92,28 @@ func backgroundRefresh(ctx context.Context, cfg *Config, logger *Logger, pool *S
 
 		online, failed := 0, 0
 		for _, d := range allData {
+			if d == nil {
+				continue
+			}
 			if d.Status == "online" {
 				online++
 			} else {
 				failed++
+			}
+			if previous, ok := hostStatus[d.Hostname]; !ok || previous != d.Status {
+				level := "info"
+				message := fmt.Sprintf("%s is %s", d.Hostname, d.Status)
+				if d.Status != "online" {
+					level = "error"
+					message = fmt.Sprintf("%s failed: %s", d.Hostname, d.Error)
+				}
+				if activity != nil {
+					activity.Add(level, "host_status", d.Hostname, message, map[string]string{
+						"host":   d.Host,
+						"status": d.Status,
+					})
+				}
+				hostStatus[d.Hostname] = d.Status
 			}
 			if logger != nil {
 				logger.LogHost(d)
@@ -103,6 +130,7 @@ func backgroundRefresh(ctx context.Context, cfg *Config, logger *Logger, pool *S
 		select {
 		case <-ctx.Done():
 			return
+		case <-refreshNow:
 		case <-time.After(time.Duration(cfg.Server.Refresh) * time.Second):
 		}
 	}
@@ -138,6 +166,7 @@ func main() {
 	if cliPrivacy {
 		cfg.Server.Privacy = true
 	}
+	store := NewConfigStore(configPath, cfg)
 
 	log.Printf("config loaded: %d hosts, port %d, refresh %ds, privacy=%v, terminal=%v",
 		len(cfg.Hosts), cfg.Server.Port, cfg.Server.Refresh, cfg.Server.Privacy, cfg.Server.Terminal.Enabled)
@@ -152,6 +181,15 @@ func main() {
 	if err != nil {
 		log.Printf("access logger init failed: %v, continuing", err)
 		accessLogger = nil
+	}
+	activityLog, err := NewActivityLog(filepath.Join(getExeDir(), "log", "activity"), 1000)
+	if err != nil {
+		log.Printf("activity logger init failed: %v, continuing", err)
+		activityLog = nil
+	} else {
+		activityLog.Add("info", "app_start", "", "GPUBeat started", map[string]string{
+			"config": configPath,
+		})
 	}
 
 	defer func() {
@@ -169,12 +207,23 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go backgroundRefresh(ctx, cfg, logger, pool)
+	refreshNow := make(chan struct{}, 1)
+	triggerRefresh := func() {
+		select {
+		case refreshNow <- struct{}{}:
+		default:
+		}
+	}
+	go backgroundRefresh(ctx, store, logger, pool, activityLog, refreshNow)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", loggingMiddleware(handleIndex, accessLogger))
 	mux.HandleFunc("/api/gpustats", loggingMiddleware(handleGPUStats, accessLogger))
-	mux.Handle("/api/terminal", loggingMiddleware(NewTerminalHandler(cfg, pool).ServeHTTP, accessLogger))
+	configHandler := NewConfigHandler(store, activityLog, triggerRefresh)
+	mux.Handle("/api/config", loggingMiddleware(configHandler.ServeHTTP, accessLogger))
+	mux.Handle("/api/config/", loggingMiddleware(configHandler.ServeHTTP, accessLogger))
+	mux.Handle("/api/activity", loggingMiddleware(NewActivityHandler(activityLog).ServeHTTP, accessLogger))
+	mux.Handle("/api/terminal", loggingMiddleware(NewTerminalHandler(store, pool, activityLog).ServeHTTP, accessLogger))
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("GPU dashboard started: http://%s", addr)

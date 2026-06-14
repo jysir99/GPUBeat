@@ -1,419 +1,1376 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GPUBeat</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
     <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <style>
         :root {
-            --bg-primary: #1e2a3a;
-            --bg-secondary: #2b3d52;
-            --bg-nav: #243447;
-            --bg-nav-btn: #334d66;
-            --text-nav: #c8d6e0;
-            --text-nav-title: #fff;
-            --border-nav-btn: #4a6278;
-            --text-primary: #e0e8ed;
-            --text-secondary: #a0b4c4;
-            --text-muted: #7f95a5;
-            --border-color: #3d5570;
-            --border-light: rgba(255,255,255,0.07);
-            --hover-bg: rgba(255,255,255,0.06);
-            --shadow: rgba(0,0,0,0.2);
-            --chart-bg: #2b3d52;
-            --terminal-bg: #111820;
-            --terminal-panel: #172231;
-            --progress-bar: #27ae60;
-            --progress-track: rgba(255,255,255,0.08);
+            --bg: #f4f7fb;
+            --panel: #ffffff;
+            --panel-soft: #f8fafc;
+            --border: #dce3ec;
+            --border-soft: #edf1f6;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --subtle: #9aa4b2;
+            --accent: #007aff;
+            --green: #20b26b;
+            --orange: #ff9f0a;
+            --red: #ff3b30;
+            --terminal-bg: #0b1220;
+            --shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
         }
-        [data-theme="light"] {
-            --bg-primary: #f0f2f5;
-            --bg-secondary: #ffffff;
-            --bg-nav: #ffffff;
-            --bg-nav-btn: #f0f2f5;
-            --text-nav: #636e72;
-            --text-nav-title: #2c3e50;
-            --border-nav-btn: #dfe6e9;
-            --text-primary: #2c3e50;
-            --text-secondary: #636e72;
-            --text-muted: #9aa3a8;
-            --border-color: #dfe6e9;
-            --border-light: #f0f0f0;
-            --hover-bg: rgba(0,0,0,0.03);
-            --shadow: rgba(0,0,0,0.18);
-            --chart-bg: #ffffff;
-            --terminal-bg: #0f1720;
-            --terminal-panel: #ffffff;
-            --progress-bar: #27ae60;
-            --progress-track: rgba(0,0,0,0.16);
+        [data-theme="dark"] {
+            --bg: #101722;
+            --panel: #18202d;
+            --panel-soft: #141c28;
+            --border: #2a3546;
+            --border-soft: #202b3a;
+            --text: #e5edf7;
+            --muted: #a5b0bf;
+            --subtle: #728095;
+            --accent: #0a84ff;
+            --terminal-bg: #070d17;
+            --shadow: none;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { box-sizing: border-box; }
+        html, body, #app { height: 100%; }
         body {
-            background: var(--bg-primary);
-            color: var(--text-primary);
+            margin: 0;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            overflow-x: hidden;
+            letter-spacing: 0;
         }
-        button, input, select { font: inherit; }
-        .navbar {
-            background: var(--bg-nav);
-            padding: 10px 24px;
+        button, input, textarea, select { font: inherit; }
+        button { border: 0; }
+        .shell {
+            height: 100%;
             display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-            box-shadow: 0 2px 10px var(--shadow);
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            grid-template-columns: 264px minmax(0, 1fr);
+            overflow: hidden;
         }
-        .title {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--text-nav-title);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .progress-ring { width: 18px; height: 18px; transform: rotate(-90deg); flex-shrink: 0; }
-        .progress-ring__circle { stroke: var(--progress-bar); fill: none; }
-        .center { display: flex; flex-direction: column; align-items: center; color: var(--text-nav); }
-        .clock-main { font-size: 15px; font-weight: 600; }
-        .clock-sub { font-size: 11px; opacity: 0.65; margin-top: 1px; }
-        .error-badge { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-top: 3px; }
-        .controls { display: flex; align-items: center; gap: 8px; white-space: nowrap; justify-self: end; }
-        .controls select, .controls input, .terminal-select {
-            padding: 5px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border-nav-btn);
-            background: var(--bg-nav-btn);
-            color: var(--text-primary);
-            font-size: 13px;
-        }
-        .controls select { min-width: 140px; }
-        .controls input { width: 54px; text-align: center; }
-        .btn {
-            padding: 6px 12px;
-            border-radius: 4px;
-            border: 1px solid transparent;
-            cursor: pointer;
-            background: #27ae60;
-            color: #fff;
-            font-size: 13px;
-            transition: opacity 0.2s, background 0.2s;
-        }
-        .btn:hover { opacity: 0.9; }
-        .btn.secondary { background: var(--bg-nav-btn); border-color: var(--border-nav-btn); color: var(--text-primary); }
-        .btn.danger { background: #c0392b; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .section { padding: 16px 24px; }
-        .cards-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-        .gpu-card {
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            padding: 14px;
-            box-shadow: 0 2px 8px var(--shadow);
-            border-left: 4px solid transparent;
-            min-height: 118px;
+        .sidebar {
+            min-width: 0;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
-        .card-gpu-name { font-size: 13px; font-weight: 650; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-        .gpu-idx { font-size: 12px; opacity: 0.7; }
-        .card-metrics { display: flex; justify-content: space-between; gap: 6px; }
-        .card-metric { text-align: center; flex: 1; min-width: 50px; }
-        .card-metric .val { font-size: 22px; font-weight: 700; line-height: 1.2; }
-        .card-metric .lbl { font-size: 11px; opacity: 0.7; }
-        .card-users { margin-top: auto; padding-top: 8px; font-size: 12px; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 18px; }
-        .host-tag { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-        .temp-high, .mem-high { color: #e74c3c; }
-        .temp-mid, .mem-mid { color: #f39c12; }
-        .temp-low { color: #2ecc71; }
-        .mem-low { color: var(--text-primary); }
-        .table-wrapper { overflow-x: auto; border-radius: 8px; box-shadow: 0 2px 10px var(--shadow); }
-        table { width: 100%; border-collapse: collapse; background: var(--bg-secondary); table-layout: fixed; min-width: 1100px; }
-        thead { background: var(--bg-primary); }
-        th { padding: 12px 14px; text-align: left; font-size: 13px; font-weight: 700; border-bottom: 3px solid var(--border-color); white-space: nowrap; }
-        td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
-        tr:hover td { background: var(--hover-bg); }
-        .host-row td { background: var(--bg-primary); border-top: 3px solid var(--border-color); font-weight: 700; }
-        .host-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-        .status { font-size: 11px; padding: 2px 8px; border-radius: 8px; }
-        .status.online { background: rgba(39,174,96,0.18); color: #2ecc71; }
-        .status.error { background: rgba(231,76,60,0.18); color: #e74c3c; }
-        .muted { color: var(--text-muted); }
-        .mem-bar { display: inline-block; width: 120px; height: 12px; background: var(--progress-track); border-radius: 6px; overflow: hidden; vertical-align: middle; margin-left: 8px; }
-        .mem-bar-inner { display: block; height: 100%; border-radius: 6px; transition: width 0.4s ease; }
-        .charts-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 4px 24px 16px; }
-        .chart-container { background: var(--chart-bg); border-radius: 8px; padding: 16px; box-shadow: 0 2px 10px var(--shadow); }
-        .chart-container h3, .terminal-title { font-size: 15px; margin-bottom: 12px; color: var(--text-primary); }
-        .chart-box { height: 320px; }
-        .terminal-section { padding: 4px 24px 20px; }
-        .terminal-panel { background: var(--terminal-panel); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 2px 10px var(--shadow); overflow: hidden; }
-        .terminal-toolbar {
+        .brand {
+            min-height: 64px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-soft);
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            border-bottom: 1px solid var(--border-color);
-            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 10px;
         }
-        .terminal-select { min-width: 180px; }
-        .terminal-status { font-size: 12px; color: var(--text-muted); margin-left: auto; }
-        .terminal-status.connected { color: #2ecc71; }
-        .terminal-status.error { color: #e74c3c; }
-        .terminal-box { height: 420px; background: var(--terminal-bg); padding: 8px; }
-        .terminal-box .xterm { height: 100%; }
-        .empty-state { text-align: center; padding: 56px 20px; color: var(--text-muted); }
-        .empty-state .icon { font-size: 44px; margin-bottom: 12px; }
-        .footer { text-align: center; padding: 16px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border-color); }
-        .footer a { color: var(--text-muted); text-decoration: none; }
-        .footer a:hover { color: var(--text-primary); text-decoration: underline; }
-        @media (max-width: 768px) {
-            .navbar { display: flex; flex-wrap: wrap; padding: 8px 12px; gap: 6px; }
-            .center { flex-direction: row; gap: 8px; margin-left: auto; }
-            .controls { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
-            .controls select { min-width: 0; flex: 1; }
-            .section, .terminal-section { padding-left: 12px; padding-right: 12px; }
-            .charts-section { grid-template-columns: 1fr; padding-left: 12px; padding-right: 12px; }
-            .chart-box { height: 260px; }
+        .brand-title { font-size: 20px; font-weight: 780; }
+        .brand-subtitle { margin-top: 2px; font-size: 12px; color: var(--muted); }
+        .sidebar-list { padding: 10px; overflow: auto; }
+        .nav-section {
+            padding: 2px 0 10px;
+            border-bottom: 1px solid var(--border-soft);
+            margin-bottom: 10px;
+        }
+        .nav-section:last-child {
+            border-bottom: 0;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .nav-section-title,
+        .host-group-title {
+            height: 24px;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 780;
+            text-transform: uppercase;
+        }
+        .host-group { margin-top: 4px; }
+        .host-group + .host-group { margin-top: 8px; }
+        .section-count {
+            color: var(--subtle);
+            font-size: 11px;
+            font-weight: 720;
+        }
+        .sidebar-empty {
+            padding: 10px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .nav-item {
+            width: 100%;
+            min-height: 48px;
+            display: grid;
+            grid-template-columns: 10px minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: center;
+            padding: 9px 10px;
+            margin-bottom: 6px;
+            color: var(--text);
+            background: transparent;
+            border-radius: 8px;
+            text-align: left;
+            cursor: pointer;
+        }
+        .nav-item:hover { background: var(--panel-soft); }
+        .nav-item.active { background: rgba(0, 122, 255, 0.1); color: var(--accent); }
+        .dot { width: 9px; height: 9px; border-radius: 999px; background: var(--subtle); }
+        .dot.online { background: var(--green); }
+        .dot.error { background: var(--red); }
+        .dot.warn { background: var(--orange); }
+        .dot.gpu { background: var(--accent); }
+        .dot.generic { background: var(--green); }
+        .nav-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 720; }
+        .nav-meta { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+        .nav-count { color: var(--muted); font-size: 12px; }
+        .main { height: 100%; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar {
+            min-height: 64px;
+            padding: 10px 18px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            flex-shrink: 0;
+        }
+        .page-title { font-size: 18px; font-weight: 760; }
+        .page-subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
+        .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .content {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            padding: 18px;
+            contain: layout style;
+        }
+        .section { margin-bottom: 16px; }
+        .section-title { margin: 0 0 10px; font-size: 14px; font-weight: 760; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        .panel, .metric-card, .server-card, .gpu-card, .event-row {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+        }
+        .panel { padding: 14px; }
+        .metric-card { padding: 14px; }
+        .metric-value { font-size: 26px; font-weight: 780; line-height: 1; }
+        .metric-label { margin-top: 8px; color: var(--muted); font-size: 12px; }
+        .server-card { padding: 13px; cursor: pointer; }
+        .server-card:hover { border-color: var(--accent); }
+        .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 760; }
+        .meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 9px; color: var(--muted); font-size: 12px; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            height: 22px;
+            padding: 0 8px;
+            border-radius: 8px;
+            background: var(--panel-soft);
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 720;
+            white-space: nowrap;
+        }
+        .badge.online, .badge.info { background: rgba(32, 178, 107, 0.12); color: var(--green); }
+        .badge.error { background: rgba(255, 59, 48, 0.12); color: var(--red); }
+        .badge.warn { background: rgba(255, 159, 10, 0.14); color: var(--orange); }
+        .btn {
+            height: 32px;
+            padding: 0 12px;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #fff;
+            font-weight: 720;
+            cursor: pointer;
+        }
+        .btn.secondary { background: var(--panel-soft); color: var(--text); border: 1px solid var(--border); }
+        .btn.danger { background: var(--red); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .field, .textarea, .select {
+            width: 100%;
+            min-height: 32px;
+            padding: 6px 9px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--panel-soft);
+            color: var(--text);
+            outline: none;
+        }
+        .field.small { width: 68px; text-align: center; }
+        .field.lang { width: 104px; min-width: 104px; }
+        .textarea { resize: vertical; min-height: 66px; }
+        .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        .form-row { min-width: 0; }
+        .form-row.full { grid-column: 1 / -1; }
+        .label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 12px; font-weight: 680; }
+        .check-row { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--muted); font-size: 13px; }
+        .table-wrap { overflow: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 760px; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid var(--border-soft); text-align: left; font-size: 13px; }
+        th { background: var(--panel-soft); color: var(--muted); font-weight: 760; }
+        tr:last-child td { border-bottom: 0; }
+        .host-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+        .host-name { font-size: 20px; font-weight: 780; }
+        .stat-box { padding: 10px; border-radius: 8px; background: var(--panel-soft); }
+        .stat-value { font-size: 20px; font-weight: 780; line-height: 1; }
+        .stat-label { margin-top: 6px; color: var(--muted); font-size: 12px; }
+        .bar { height: 8px; margin-top: 8px; border-radius: 999px; background: var(--border-soft); overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: inherit; background: var(--accent); }
+        .gpu-grid { display: grid; gap: 12px; }
+        .gpu-grid.layout-single { grid-template-columns: minmax(0, 1fr); }
+        .gpu-grid.layout-dual, .gpu-grid.layout-quad { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .gpu-grid.layout-eight { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .gpu-card { padding: 13px; min-width: 0; contain: content; }
+        .gpu-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+        .gpu-title { font-weight: 760; line-height: 1.35; }
+        .gpu-subtitle { margin-top: 2px; color: var(--muted); font-size: 12px; }
+        .gpu-stats { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .process-list { margin-top: 12px; border-top: 1px solid var(--border-soft); padding-top: 10px; color: var(--muted); font-size: 12px; }
+        .process-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 4px 0; }
+        .process-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .event-list { display: grid; gap: 8px; }
+        .event-row { padding: 11px 12px; display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+        .event-time { color: var(--muted); font-size: 12px; white-space: nowrap; }
+        .event-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .event-host { color: var(--muted); font-size: 12px; }
+        .empty { padding: 44px 16px; text-align: center; color: var(--muted); }
+        .terminal-panel { padding: 12px; }
+        .terminal-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+        .terminal-status { margin-left: auto; color: var(--muted); font-size: 12px; }
+        .terminal-status.connected { color: var(--green); }
+        .terminal-status.error { color: var(--red); }
+        .terminal-box {
+            height: 420px;
+            padding: 8px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--terminal-bg);
+        }
+        .terminal-inner { height: 100%; width: 100%; overflow: hidden; }
+        .terminal-inner .xterm { height: 100%; width: 100%; }
+        .terminal-inner .xterm-viewport { overflow-y: auto; }
+        .danger-text { color: var(--red); }
+        .muted { color: var(--muted); }
+        @media (max-width: 1180px) {
+            .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .gpu-grid.layout-eight { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 820px) {
+            body { overflow: auto; }
+            html, body, #app { height: auto; min-height: 100%; }
+            .shell { display: block; height: auto; overflow: visible; }
+            .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+            .sidebar-list { display: flex; gap: 8px; overflow-x: auto; padding: 10px; }
+            .nav-section {
+                min-width: 210px;
+                border: 1px solid var(--border-soft);
+                border-radius: 8px;
+                margin-bottom: 0;
+                padding: 6px;
+                flex: 0 0 auto;
+            }
+            .nav-section:last-child { border-bottom: 1px solid var(--border-soft); }
+            .nav-section-title { padding: 0 6px; }
+            .host-group-title { padding: 0 6px; }
+            .nav-item { min-width: 180px; margin-bottom: 6px; }
+            .nav-item:last-child { margin-bottom: 0; }
+            .main { height: auto; overflow: visible; }
+            .topbar { align-items: flex-start; flex-direction: column; }
+            .content { overflow: visible; padding: 12px; }
+            .grid-2, .grid-3, .grid-4, .form-grid, .host-hero { grid-template-columns: 1fr; }
+            .gpu-grid.layout-single, .gpu-grid.layout-dual, .gpu-grid.layout-quad, .gpu-grid.layout-eight { grid-template-columns: 1fr; }
+            .event-row { grid-template-columns: 1fr; }
             .terminal-box { height: 360px; }
-            .terminal-status { width: 100%; margin-left: 0; }
         }
     </style>
 </head>
 <body>
 <div id="app">
-    <div class="navbar">
-        <div class="title">
-            GPUBeat
-            <svg class="progress-ring" viewBox="0 0 18 18">
-                <circle cx="9" cy="9" r="7" stroke="var(--progress-track)" stroke-width="2" fill="none"></circle>
-                <circle class="progress-ring__circle" ref="progressRing" cx="9" cy="9" r="7" stroke-width="2" stroke-dasharray="43.98" stroke-dashoffset="43.98" stroke-linecap="round"></circle>
-            </svg>
-        </div>
-        <div class="center">
-            <span class="clock-main">{{ currentDate }} {{ currentTime }}</span>
-            <span class="clock-sub">{{ refreshAgo }}s ago</span>
-            <span v-if="errorCount > 0" class="error-badge">{{ errorCount }} errors</span>
-        </div>
-        <div class="controls">
-            <select v-model="selectedHost">
-                <option value="all">All hosts</option>
-                <option v-for="h in hostOptions" :key="h.hostname" :value="h.hostname">{{ h.name }}</option>
-            </select>
-            <span style="color:var(--text-nav)">Interval</span>
-            <input type="number" v-model.number="refreshInterval" min="1" max="60">
-            <button class="btn" @click="fetchData">Refresh</button>
-            <button class="btn secondary" @click="toggleTheme">{{ theme === 'dark' ? 'Light' : 'Dark' }}</button>
-        </div>
-    </div>
-
-    <div v-if="filteredStats.length === 0 && !update_time" class="empty-state">
-        <div class="icon">GPU</div>
-        <p>Waiting for GPU data...</p>
-    </div>
-
-    <div class="section" v-if="filteredStats.length > 0">
-        <div class="cards-flow">
-            <template v-for="(host, hi) in filteredStats">
-                <div v-if="host.status === 'error'" :key="host.hostname + '-err'" class="gpu-card" :style="{'border-left-color': '#e74c3c'}">
-                    <div class="card-gpu-name">
-                        <span class="host-tag" :style="{background: hostColor(hi)}"></span>
-                        {{ host.hostname }}
-                    </div>
-                    <div style="color:#e74c3c;font-size:13px">{{ host.error || 'Host unavailable' }}</div>
+    <div class="shell">
+        <aside class="sidebar">
+            <div class="brand">
+                <div>
+                    <div class="brand-title">GPUBeat</div>
+                    <div class="brand-subtitle">{{ t('brand.online', {online: onlineCount, total: gpustats.length}) }}</div>
                 </div>
-                <div v-else v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index" class="gpu-card" :style="{'border-left-color': hostColor(hi)}">
-                    <div class="card-gpu-name">
-                        <span class="host-tag" :style="{background: hostColor(hi)}"></span>
-                        <span class="gpu-idx">[{{ gpu.index }}]</span> {{ gpu.name || '-' }}
-                    </div>
-                    <div class="card-metrics">
-                        <div class="card-metric">
-                            <div class="val" :class="tempClass(gpu['temperature.gpu'])">{{ gpu['temperature.gpu'] || 0 }}C</div>
-                            <div class="lbl">Temp</div>
-                        </div>
-                        <div class="card-metric">
-                            <div class="val" :class="memClass(gpu.memory)">{{ gpu.memory || 0 }}%</div>
-                            <div class="lbl">VRAM</div>
-                        </div>
-                        <div class="card-metric">
-                            <div class="val">{{ gpu['utilization.gpu'] || 0 }}%</div>
-                            <div class="lbl">Util</div>
-                        </div>
-                    </div>
-                    <div class="card-users">
-                        <template v-if="gpu.user_processes && gpu.user_processes !== '-'">{{ gpu.user_processes }}</template>
-                        <span v-else class="muted">No GPU processes</span>
-                    </div>
-                </div>
-            </template>
-        </div>
-    </div>
-
-    <div class="section" v-if="filteredStats.length > 0">
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width:260px">GPU</th>
-                        <th style="width:130px">Temperature</th>
-                        <th style="width:130px">Utilization</th>
-                        <th style="width:260px">VRAM</th>
-                        <th style="width:150px">Power</th>
-                        <th>Users</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template v-for="(host, hi) in filteredStats">
-                        <tr class="host-row">
-                            <td colspan="6">
-                                <div class="host-meta">
-                                    <span class="host-tag" :style="{background: hostColor(hi)}"></span>
-                                    <span>{{ host.hostname }}</span>
-                                    <span class="status" :class="host.status">{{ host.status }}</span>
-                                    <span v-if="host.status === 'online' && host.gpus" class="muted">{{ host.gpus.length }} GPUs</span>
-                                    <span v-if="host.status === 'online' && host.sys" class="muted">CPU {{ fmtPercent(host.sys.cpu_usage) }} · MEM {{ fmtMemMB(host.sys.mem_used) }}/{{ fmtMemMB(host.sys.mem_total) }} · Load {{ fmtLoad(host.sys.load_1) }}</span>
-                                    <span v-if="host.status === 'error'" style="color:#e74c3c">{{ host.error }}</span>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index">
-                            <td><span class="host-tag" :style="{background: hostColor(hi)}"></span> [{{ gpu.index }}] {{ gpu.name || '-' }}</td>
-                            <td :class="tempClass(gpu['temperature.gpu'])">{{ gpu['temperature.gpu'] || 0 }}C</td>
-                            <td>{{ gpu['utilization.gpu'] || 0 }}%</td>
-                            <td :class="memClass(gpu.memory)">
-                                {{ fmtGB(gpu['memory.used'] || 0) }} / {{ fmtGB(gpu['memory.total'] || 0) }} ({{ gpu.memory || 0 }}%)
-                                <span class="mem-bar"><span class="mem-bar-inner" :style="{width: (gpu.memory || 0) + '%', background: barColor(gpu.memory)}"></span></span>
-                            </td>
-                            <td>{{ gpu['power.draw'] || '-' }} / {{ gpu['enforced.power.limit'] || '-' }} W</td>
-                            <td>{{ gpu.user_processes || '-' }}</td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="charts-section" v-if="filteredStats.length > 0">
-        <div class="chart-container">
-            <h3>User VRAM Usage</h3>
-            <div class="chart-box" id="barChart"></div>
-        </div>
-        <div class="chart-container">
-            <h3>GPU VRAM Share</h3>
-            <div class="chart-box" id="pieChart"></div>
-        </div>
-    </div>
-
-    <div class="terminal-section">
-        <div class="terminal-panel">
-            <div class="terminal-toolbar">
-                <strong class="terminal-title" style="margin-bottom:0">Web Terminal</strong>
-                <select class="terminal-select" v-model="terminalHost" :disabled="terminalConnected">
-                    <option value="">Select host</option>
-                    <option v-for="h in hostOptions" :key="'term-' + h.hostname" :value="h.hostname">{{ h.name }}</option>
-                </select>
-                <input class="terminal-select" type="password" v-model="terminalToken" placeholder="Token" :disabled="terminalConnected" @change="saveTerminalToken">
-                <button class="btn" @click="connectTerminal" :disabled="terminalConnected || !terminalHost">Connect</button>
-                <button class="btn danger" @click="disconnectTerminal" :disabled="!terminalConnected">Disconnect</button>
-                <button class="btn secondary" @click="clearTerminal">Clear</button>
-                <span class="terminal-status" :class="{connected: terminalConnected, error: terminalStatusType === 'error'}">{{ terminalStatus }}</span>
+                <span class="badge" :class="errorCount ? 'error' : 'online'">{{ errorCount ? t('brand.errors', {count: errorCount}) : t('brand.healthy') }}</span>
             </div>
-            <div class="terminal-box" ref="terminalBox"></div>
-        </div>
-    </div>
+            <div class="sidebar-list">
+                <div class="nav-section">
+                    <div class="nav-section-title">
+                        <span>{{ t('nav.monitor') }}</span>
+                        <span class="section-count">{{ onlineCount }}/{{ gpustats.length }}</span>
+                    </div>
+                    <button class="nav-item" :class="{active: view === 'overview'}" @click="setView('overview')">
+                        <span class="dot online"></span>
+                        <span>
+                            <span class="nav-name">{{ t('nav.overview') }}</span>
+                            <span class="nav-meta">{{ t('nav.overviewMeta') }}</span>
+                        </span>
+                        <span class="nav-count">{{ t('nav.all') }}</span>
+                    </button>
+                    <button class="nav-item" :class="{active: view === 'activity'}" @click="setView('activity')">
+                        <span class="dot warn"></span>
+                        <span>
+                            <span class="nav-name">{{ t('nav.activity') }}</span>
+                            <span class="nav-meta">{{ t('nav.activityMeta') }}</span>
+                        </span>
+                        <span class="nav-count">{{ events.length }}</span>
+                    </button>
+                </div>
 
-    <div class="footer">
-        {{ update_time || 'No data yet' }} &nbsp;|&nbsp;
-        <a href="https://github.com/jysir99/gpubeat" target="_blank">GitHub</a> &nbsp;|&nbsp;
-        GPUBeat
+                <div class="nav-section">
+                    <div class="nav-section-title">
+                        <span>{{ t('nav.admin') }}</span>
+                        <span class="section-count">{{ config.hosts.length }}</span>
+                    </div>
+                    <button class="nav-item" :class="{active: view === 'config'}" @click="setView('config')">
+                        <span class="dot"></span>
+                        <span>
+                            <span class="nav-name">{{ t('nav.config') }}</span>
+                            <span class="nav-meta">{{ t('nav.configMeta') }}</span>
+                        </span>
+                        <span class="nav-count">{{ t('nav.edit') }}</span>
+                    </button>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">
+                        <span>{{ t('nav.servers') }}</span>
+                        <span class="section-count">{{ gpustats.length }}</span>
+                    </div>
+                    <div v-if="gpustats.length === 0" class="sidebar-empty">{{ t('nav.noHosts') }}</div>
+
+                    <div v-if="errorHosts.length" class="host-group">
+                        <div class="host-group-title">
+                            <span>{{ t('nav.needsAttention') }}</span>
+                            <span class="section-count">{{ errorHosts.length }}</span>
+                        </div>
+                        <button class="nav-item" v-for="host in errorHosts" :key="'err-' + host.hostname" :class="{active: view === 'host' && selectedHost === host.hostname}" @click="selectHost(host.hostname)">
+                            <span class="dot error"></span>
+                            <span>
+                                <span class="nav-name">{{ host.hostname }}</span>
+                                <span class="nav-meta">{{ host.error || hostNavMeta(host) }}</span>
+                            </span>
+                            <span class="nav-count">{{ t('nav.err') }}</span>
+                        </button>
+                    </div>
+
+                    <div v-if="gpuHosts.length" class="host-group">
+                        <div class="host-group-title">
+                            <span>{{ t('nav.gpuHosts') }}</span>
+                            <span class="section-count">{{ gpuHosts.length }}</span>
+                        </div>
+                        <button class="nav-item" v-for="host in gpuHosts" :key="'gpu-' + host.hostname" :class="{active: view === 'host' && selectedHost === host.hostname}" @click="selectHost(host.hostname)">
+                            <span class="dot gpu"></span>
+                            <span>
+                                <span class="nav-name">{{ host.hostname }}</span>
+                                <span class="nav-meta">{{ hostNavMeta(host) }}</span>
+                            </span>
+                            <span class="nav-count">{{ t('unit.gpus', {count: (host.gpus || []).length}) }}</span>
+                        </button>
+                    </div>
+
+                    <div v-if="genericHosts.length" class="host-group">
+                        <div class="host-group-title">
+                            <span>{{ t('nav.generalHosts') }}</span>
+                            <span class="section-count">{{ genericHosts.length }}</span>
+                        </div>
+                        <button class="nav-item" v-for="host in genericHosts" :key="'gen-' + host.hostname" :class="{active: view === 'host' && selectedHost === host.hostname}" @click="selectHost(host.hostname)">
+                            <span class="dot generic"></span>
+                            <span>
+                                <span class="nav-name">{{ host.hostname }}</span>
+                                <span class="nav-meta">{{ hostNavMeta(host) }}</span>
+                            </span>
+                            <span class="nav-count">{{ t('metric.cpuShort') }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <div>
+                    <div class="page-title">{{ pageTitle }}</div>
+                    <div class="page-subtitle">{{ pageSubtitle }}</div>
+                </div>
+                <div class="toolbar">
+                    <span class="page-subtitle">{{ t('toolbar.interval') }}</span>
+                    <input class="field small" type="number" v-model.number="refreshInterval" min="1" max="60">
+                    <button class="btn" @click="refreshAll">{{ t('toolbar.refresh') }}</button>
+                    <select class="field lang" v-model="language" @change="setLanguage(language)">
+                        <option value="en">English</option>
+                        <option value="zh">中文</option>
+                    </select>
+                    <button class="btn secondary" @click="toggleTheme">{{ theme === 'dark' ? t('toolbar.light') : t('toolbar.dark') }}</button>
+                </div>
+            </header>
+
+            <div class="content">
+                <template v-if="view === 'overview'">
+                    <section class="section grid-4">
+                        <div class="metric-card">
+                            <div class="metric-value">{{ onlineCount }}/{{ gpustats.length }}</div>
+                            <div class="metric-label">{{ t('overview.onlineHosts') }}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ totalGpuCount }}</div>
+                            <div class="metric-label">{{ t('overview.detectedGpus') }}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ fmtPercent(avgCPU) }}</div>
+                            <div class="metric-label">{{ t('overview.avgCpu') }}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ fmtPercent(avgGPU) }}</div>
+                            <div class="metric-label">{{ t('overview.avgGpu') }}</div>
+                        </div>
+                    </section>
+
+                    <section class="section">
+                        <h2 class="section-title">{{ t('overview.hosts') }}</h2>
+                        <div v-if="gpustats.length === 0" class="panel empty">{{ t('overview.waitingHosts') }}</div>
+                        <div v-else class="grid-3">
+                            <article class="server-card" v-for="host in gpustats" :key="'card-' + host.hostname" @click="selectHost(host.hostname)">
+                                <div class="card-head">
+                                    <div class="card-title">{{ host.hostname }}</div>
+                                    <span class="badge" :class="host.status">{{ statusLabel(host.status) }}</span>
+                                </div>
+                                <div class="meta" v-if="host.status === 'online'">
+                                    <span>{{ host.provider || 'SSH' }}</span>
+                                    <span>{{ t('unit.gpus', {count: (host.gpus || []).length}) }}</span>
+                                    <span>{{ t('metric.cpuShort') }} {{ fmtPercent(host.sys && host.sys.cpu_usage) }}</span>
+                                    <span>{{ t('metric.memShort') }} {{ fmtPercent(host.sys && host.sys.mem_percent) }}</span>
+                                    <span>{{ t('metric.load') }} {{ fmtLoad(host.sys && host.sys.load_1) }}</span>
+                                </div>
+                                <div class="meta danger-text" v-else>{{ host.error || t('host.unavailable') }}</div>
+                            </article>
+                        </div>
+                    </section>
+                </template>
+
+                <template v-if="view === 'activity'">
+                    <section class="section panel">
+                        <div class="card-head">
+                            <div>
+                                <h2 class="section-title">{{ t('activity.title') }}</h2>
+                                <div class="page-subtitle">{{ t('activity.subtitle') }}</div>
+                            </div>
+                            <button class="btn secondary" @click="fetchActivity">{{ t('activity.refresh') }}</button>
+                        </div>
+                    </section>
+                    <section class="section">
+                        <div v-if="events.length === 0" class="panel empty">{{ t('activity.empty') }}</div>
+                        <div v-else class="event-list">
+                            <article class="event-row" v-for="event in events" :key="event.time + event.type + event.message">
+                                <span class="badge" :class="event.level">{{ levelLabel(event.level) }}</span>
+                                <div>
+                                    <div class="event-message">{{ event.message }}</div>
+                                    <div class="event-host">{{ eventTypeLabel(event.type) }} {{ event.host ? '/ ' + event.host : '' }}</div>
+                                </div>
+                                <div class="event-time">{{ shortTime(event.time) }}</div>
+                            </article>
+                        </div>
+                    </section>
+                </template>
+
+                <template v-if="view === 'config'">
+                    <section class="section panel">
+                        <h2 class="section-title">{{ t('config.runtime') }}</h2>
+                        <div class="form-grid">
+                            <label class="form-row">
+                                <span class="label">{{ t('config.refreshSeconds') }}</span>
+                                <input class="field" type="number" v-model.number="serverForm.refresh" min="1" max="60">
+                            </label>
+                            <label class="form-row">
+                                <span class="label">{{ t('config.configToken') }}</span>
+                                <input class="field" type="password" v-model="terminalToken" :placeholder="t('config.configTokenPlaceholder')" @change="saveTerminalToken">
+                            </label>
+                            <label class="form-row">
+                                <span class="label">{{ t('config.newTerminalToken') }}</span>
+                                <input class="field" type="password" v-model="serverForm.terminal_token" :placeholder="t('config.keepBlank')">
+                            </label>
+                            <label class="check-row">
+                                <input type="checkbox" v-model="serverForm.privacy">
+                                <span>{{ t('config.privacyMode') }}</span>
+                            </label>
+                            <label class="check-row">
+                                <input type="checkbox" v-model="serverForm.terminal_enabled">
+                                <span>{{ t('config.enableTerminal') }}</span>
+                            </label>
+                            <div class="toolbar">
+                                <button class="btn" @click="saveServer">{{ t('config.saveSettings') }}</button>
+                                <button class="btn secondary" @click="loadServerForm">{{ t('common.reset') }}</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section panel">
+                        <div class="card-head">
+                            <h2 class="section-title">{{ editingHost ? t('config.editSshHost') : t('config.addSshHost') }}</h2>
+                            <button class="btn secondary" @click="resetHostForm">{{ t('config.newHost') }}</button>
+                        </div>
+                        <div class="form-grid">
+                            <label class="form-row">
+                                <span class="label">{{ t('config.name') }}</span>
+                                <input class="field" v-model.trim="hostForm.name" placeholder="tencent-gpu-1">
+                            </label>
+                            <label class="form-row">
+                                <span class="label">{{ t('config.hostIp') }}</span>
+                                <input class="field" v-model.trim="hostForm.host" placeholder="203.0.113.10">
+                            </label>
+                            <label class="form-row">
+                                <span class="label">{{ t('config.port') }}</span>
+                                <input class="field" type="number" v-model.number="hostForm.port" min="1" max="65535">
+                            </label>
+                            <label class="form-row">
+                                <span class="label">{{ t('config.username') }}</span>
+                                <input class="field" v-model.trim="hostForm.username" placeholder="ubuntu">
+                            </label>
+                            <label class="form-row">
+                                <span class="label">{{ t('config.password') }}</span>
+                                <input class="field" type="password" v-model="hostForm.password" :placeholder="editingHost ? t('config.keepBlank') : t('config.sshPassword')">
+                            </label>
+                            <label class="form-row">
+                                <span class="label">{{ t('config.provider') }}</span>
+                                <input class="field" v-model.trim="hostForm.provider" placeholder="Tencent Cloud">
+                            </label>
+                            <label class="form-row">
+                                <span class="label">{{ t('config.region') }}</span>
+                                <input class="field" v-model.trim="hostForm.region" placeholder="ap-guangzhou">
+                            </label>
+                            <label class="form-row full">
+                                <span class="label">{{ t('config.notes') }}</span>
+                                <textarea class="textarea" v-model.trim="hostForm.notes" :placeholder="t('config.notesPlaceholder')"></textarea>
+                            </label>
+                            <div class="toolbar form-row full">
+                                <button class="btn" @click="saveHost">{{ editingHost ? t('config.saveHost') : t('config.addHost') }}</button>
+                                <button class="btn secondary" @click="resetHostForm">{{ t('common.clear') }}</button>
+                                <button v-if="editingHost" class="btn danger" @click="deleteHost(editingHost)">{{ t('common.delete') }}</button>
+                                <span class="page-subtitle">{{ configStatusText }}</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section panel">
+                        <h2 class="section-title">{{ t('config.configuredHosts') }}</h2>
+                        <div v-if="config.hosts.length === 0" class="empty">{{ t('config.noConfiguredHosts') }}</div>
+                        <div v-else class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>{{ t('config.name') }}</th>
+                                        <th>{{ t('config.host') }}</th>
+                                        <th>{{ t('config.user') }}</th>
+                                        <th>{{ t('config.provider') }}</th>
+                                        <th>{{ t('config.region') }}</th>
+                                        <th>{{ t('config.password') }}</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="host in config.hosts" :key="'cfg-' + host.name">
+                                        <td>{{ host.name }}</td>
+                                        <td>{{ host.host }}:{{ host.port }}</td>
+                                        <td>{{ host.username }}</td>
+                                        <td>{{ host.provider || '-' }}</td>
+                                        <td>{{ host.region || '-' }}</td>
+                                        <td>{{ host.password_set ? t('config.passwordSet') : t('config.passwordEmpty') }}</td>
+                                        <td><button class="btn secondary" @click="editHost(host)">{{ t('common.edit') }}</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </template>
+
+                <template v-if="view === 'host'">
+                    <section v-if="!currentHost" class="panel empty">{{ t('host.selectHost') }}</section>
+                    <template v-else>
+                        <section class="section panel host-hero">
+                            <div>
+                                <div class="host-name">{{ currentHost.hostname }}</div>
+                                <div class="meta">
+                                    <span>{{ currentHost.provider || 'SSH' }}</span>
+                                    <span v-if="currentHost.region">{{ currentHost.region }}</span>
+                                    <span>{{ currentHost.host }}</span>
+                                    <span>{{ t('unit.gpus', {count: (currentHost.gpus || []).length}) }}</span>
+                                </div>
+                            </div>
+                            <span class="badge" :class="currentHost.status">{{ statusLabel(currentHost.status) }}</span>
+                        </section>
+
+                        <section v-if="currentHost.status !== 'online'" class="section panel danger-text">
+                            {{ currentHost.error || t('host.unavailable') }}
+                        </section>
+
+                        <template v-else>
+                            <section class="section grid-4">
+                                <div class="stat-box">
+                                    <div class="stat-value">{{ fmtPercent(currentHost.sys && currentHost.sys.cpu_usage) }}</div>
+                                    <div class="stat-label">{{ t('metric.cpuShort') }}</div>
+                                    <div class="bar"><div class="bar-fill" :style="{width: clampPercent(currentHost.sys && currentHost.sys.cpu_usage)}"></div></div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value">{{ fmtPercent(currentHost.sys && currentHost.sys.mem_percent) }}</div>
+                                    <div class="stat-label">{{ t('metric.memory') }} {{ fmtMemMB(currentHost.sys && currentHost.sys.mem_used) }} / {{ fmtMemMB(currentHost.sys && currentHost.sys.mem_total) }}</div>
+                                    <div class="bar"><div class="bar-fill" :style="{width: clampPercent(currentHost.sys && currentHost.sys.mem_percent)}"></div></div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value">{{ fmtLoad(currentHost.sys && currentHost.sys.load_1) }}</div>
+                                    <div class="stat-label">{{ t('metric.load') }} 1m / {{ fmtLoad(currentHost.sys && currentHost.sys.load_5) }} / {{ fmtLoad(currentHost.sys && currentHost.sys.load_15) }}</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value">{{ fmtBytes(currentHost.net && currentHost.net.rx_bytes) }}</div>
+                                    <div class="stat-label">{{ t('metric.rx') }} / {{ t('metric.tx') }} {{ fmtBytes(currentHost.net && currentHost.net.tx_bytes) }}</div>
+                                </div>
+                            </section>
+
+                            <section class="section grid-2">
+                                <div class="panel">
+                                    <h2 class="section-title">{{ t('host.disks') }}</h2>
+                                    <div v-if="!currentHost.disks || currentHost.disks.length === 0" class="empty">{{ t('host.noDiskData') }}</div>
+                                    <div v-else class="table-wrap">
+                                        <table>
+                                            <thead><tr><th>{{ t('host.mount') }}</th><th>{{ t('host.used') }}</th><th>{{ t('host.total') }}</th><th>{{ t('host.usage') }}</th></tr></thead>
+                                            <tbody>
+                                                <tr v-for="disk in currentHost.disks" :key="disk.mount">
+                                                    <td>{{ disk.mount }}</td>
+                                                    <td>{{ fmtMemMB(disk.used_mb) }}</td>
+                                                    <td>{{ fmtMemMB(disk.size_mb) }}</td>
+                                                    <td>{{ fmtPercent(disk.use_percent) }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="panel">
+                                    <h2 class="section-title">{{ t('host.notes') }}</h2>
+                                    <div class="meta">{{ currentHost.notes || t('host.noNotes') }}</div>
+                                </div>
+                            </section>
+
+                            <section class="section">
+                                <div class="card-head">
+                                    <h2 class="section-title">{{ t('host.gpuDevices') }}</h2>
+                                    <div class="toolbar">
+                                        <button class="btn secondary" v-for="layout in layoutOptions" :key="layout.value" :class="{active: layoutMode === layout.value}" @click="setLayout(layout.value)">{{ layout.label }}</button>
+                                    </div>
+                                </div>
+                                <div v-if="!currentHost.gpus || currentHost.gpus.length === 0" class="panel empty">{{ t('host.noGpuDetected') }}</div>
+                                <div v-else class="gpu-grid" :class="'layout-' + effectiveLayout">
+                                    <article class="gpu-card" v-for="gpu in currentHost.gpus" :key="currentHost.hostname + '-' + gpu.index">
+                                        <div class="gpu-head">
+                                            <div>
+                                                <div class="gpu-title">{{ gpu.name || 'GPU' }}</div>
+                                                <div class="gpu-subtitle">GPU {{ gpu.index }}</div>
+                                            </div>
+                                            <span class="badge">{{ gpu['temperature.gpu'] || 0 }}C</span>
+                                        </div>
+                                        <div class="gpu-stats">
+                                            <div class="stat-box">
+                                                <div class="stat-value">{{ gpu['utilization.gpu'] || 0 }}%</div>
+                                                <div class="stat-label">{{ t('metric.util') }}</div>
+                                            </div>
+                                            <div class="stat-box">
+                                                <div class="stat-value">{{ gpu.memory || 0 }}%</div>
+                                                <div class="stat-label">{{ t('metric.vram') }}</div>
+                                            </div>
+                                            <div class="stat-box">
+                                                <div class="stat-value">{{ gpu['power.draw'] || '-' }}</div>
+                                                <div class="stat-label">{{ t('metric.watts') }}</div>
+                                            </div>
+                                        </div>
+                                        <div class="bar"><div class="bar-fill" :style="{width: clampPercent(gpu.memory)}"></div></div>
+                                        <div class="process-list">
+                                            <div v-if="!gpu.processes || gpu.processes.length === 0">{{ t('host.noGpuProcesses') }}</div>
+                                            <div v-else class="process-row" v-for="proc in gpu.processes" :key="gpu.index + '-' + proc.pid">
+                                                <span class="process-name">{{ proc.username }} / {{ proc.command }}</span>
+                                                <span>{{ fmtGB(proc.gpu_memory_usage) }}</span>
+                                            </div>
+                                        </div>
+                                    </article>
+                                </div>
+                            </section>
+
+                            <section class="section panel terminal-panel">
+                                <div class="terminal-toolbar">
+                                    <input class="field" style="max-width:220px" type="password" v-model="terminalToken" :placeholder="t('terminal.token')" :disabled="terminalConnected || terminalConnecting" @change="saveTerminalToken">
+                                    <button class="btn" @click="connectTerminal" :disabled="terminalConnected || terminalConnecting">{{ t('terminal.connect') }}</button>
+                                    <button class="btn danger" @click="disconnectTerminal" :disabled="!terminalConnected && !terminalConnecting">{{ t('terminal.disconnect') }}</button>
+                                    <button class="btn secondary" @click="clearTerminal">{{ t('common.clear') }}</button>
+                                    <span class="terminal-status" :class="{connected: terminalConnected, error: terminalStatusType === 'error'}">{{ terminalStatusText }}</span>
+                                </div>
+                                <div class="terminal-box">
+                                    <div class="terminal-inner" ref="terminalBox"></div>
+                                </div>
+                            </section>
+                        </template>
+                    </template>
+                </template>
+            </div>
+        </main>
     </div>
 </div>
 
 <script>
-var HOST_COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#e84393'];
+var I18N = {
+    en: {
+        'brand.online': '{online}/{total} online',
+        'brand.errors': '{count} errors',
+        'brand.healthy': 'healthy',
+        'nav.monitor': 'Monitor',
+        'nav.overview': 'Overview',
+        'nav.overviewMeta': 'Fleet health and capacity',
+        'nav.activity': 'Activity',
+        'nav.activityMeta': 'Status, config, terminal logs',
+        'nav.admin': 'Admin',
+        'nav.config': 'Config',
+        'nav.configMeta': 'SSH hosts and runtime settings',
+        'nav.servers': 'Servers',
+        'nav.noHosts': 'No monitored hosts yet. Add SSH hosts from Config.',
+        'nav.needsAttention': 'Needs attention',
+        'nav.gpuHosts': 'GPU hosts',
+        'nav.generalHosts': 'General hosts',
+        'nav.all': 'ALL',
+        'nav.edit': 'EDIT',
+        'nav.err': 'ERR',
+        'toolbar.interval': 'Interval',
+        'toolbar.refresh': 'Refresh',
+        'toolbar.light': 'Light',
+        'toolbar.dark': 'Dark',
+        'page.activityTitle': 'Activity',
+        'page.configTitle': 'Config',
+        'page.hostDetail': 'Host detail',
+        'page.overviewTitle': 'Overview',
+        'page.activitySubtitle': 'Events loaded from activity logs',
+        'page.configSubtitle': 'Edit SSH hosts without restarting GPUBeat',
+        'page.waitingRefresh': 'Waiting for refresh',
+        'page.waitingHostData': 'Waiting for host data',
+        'overview.onlineHosts': 'Online hosts',
+        'overview.detectedGpus': 'Detected GPUs',
+        'overview.avgCpu': 'Average CPU',
+        'overview.avgGpu': 'Average GPU',
+        'overview.hosts': 'Hosts',
+        'overview.waitingHosts': 'Waiting for host data...',
+        'activity.title': 'Activity log',
+        'activity.subtitle': 'Host status, config changes, and terminal sessions.',
+        'activity.refresh': 'Refresh log',
+        'activity.empty': 'No activity recorded yet.',
+        'config.runtime': 'Runtime settings',
+        'config.refreshSeconds': 'Refresh seconds',
+        'config.configToken': 'Config token',
+        'config.configTokenPlaceholder': 'Required only when token is set',
+        'config.newTerminalToken': 'New terminal token',
+        'config.keepBlank': 'Leave blank to keep',
+        'config.privacyMode': 'Privacy mode',
+        'config.enableTerminal': 'Enable browser terminal',
+        'config.saveSettings': 'Save settings',
+        'config.editSshHost': 'Edit SSH host',
+        'config.addSshHost': 'Add SSH host',
+        'config.newHost': 'New host',
+        'config.name': 'Name',
+        'config.hostIp': 'Host / IP',
+        'config.host': 'Host',
+        'config.port': 'Port',
+        'config.username': 'Username',
+        'config.user': 'User',
+        'config.password': 'Password',
+        'config.sshPassword': 'SSH password',
+        'config.provider': 'Provider',
+        'config.region': 'Region',
+        'config.notes': 'Notes',
+        'config.notesPlaceholder': 'Role, owner, instance type, or reminder',
+        'config.saveHost': 'Save host',
+        'config.addHost': 'Add host',
+        'config.configuredHosts': 'Configured SSH hosts',
+        'config.noConfiguredHosts': 'No hosts configured.',
+        'config.passwordSet': 'set',
+        'config.passwordEmpty': 'empty',
+        'config.settingsSaved': 'Settings saved',
+        'config.hostSaved': 'Host saved',
+        'config.loadFailed': 'Config load failed',
+        'config.saveFailed': 'Save failed',
+        'config.deleteFailed': 'Delete failed',
+        'host.unavailable': 'Host unavailable',
+        'host.selectHost': 'Select a host from the sidebar.',
+        'host.disks': 'Disks',
+        'host.noDiskData': 'No disk data.',
+        'host.mount': 'Mount',
+        'host.used': 'Used',
+        'host.total': 'Total',
+        'host.usage': 'Usage',
+        'host.notes': 'Notes',
+        'host.noNotes': 'No notes for this host.',
+        'host.gpuDevices': 'GPU devices',
+        'host.noGpuDetected': 'No GPU detected on this host.',
+        'host.noGpuProcesses': 'No GPU processes',
+        'terminal.token': 'Token',
+        'terminal.connect': 'Connect',
+        'terminal.disconnect': 'Disconnect',
+        'terminal.ready': 'GPUBeat terminal ready.',
+        'terminal.disconnected': 'Disconnected',
+        'terminal.connecting': 'Connecting to {host}...',
+        'terminal.connectingShort': 'Connecting...',
+        'terminal.connected': 'Connected',
+        'terminal.connectionFailed': 'Connection failed',
+        'terminal.error': 'Terminal error',
+        'terminal.sessionClosed': 'Session closed.',
+        'terminal.dataRefreshFailed': 'Data refresh failed',
+        'common.reset': 'Reset',
+        'common.clear': 'Clear',
+        'common.delete': 'Delete',
+        'common.edit': 'Edit',
+        'metric.cpuShort': 'CPU',
+        'metric.memShort': 'MEM',
+        'metric.memory': 'Memory',
+        'metric.load': 'Load',
+        'metric.rx': 'RX',
+        'metric.tx': 'TX',
+        'metric.util': 'Util',
+        'metric.vram': 'VRAM',
+        'metric.watts': 'Watts',
+        'unit.gpus': '{count} GPU(s)',
+        'status.online': 'online',
+        'status.error': 'error',
+        'status.unknown': 'unknown',
+        'level.info': 'info',
+        'level.warn': 'warn',
+        'level.error': 'error',
+        'event.host_status': 'Host status',
+        'event.config_update': 'Config update',
+        'event.host_add': 'Host added',
+        'event.host_update': 'Host updated',
+        'event.host_delete': 'Host deleted',
+        'event.terminal_open': 'Terminal opened',
+        'event.terminal_close': 'Terminal closed',
+        'event.terminal_error': 'Terminal error',
+        'event.app_start': 'App start'
+    },
+    zh: {
+        'brand.online': '{online}/{total} 在线',
+        'brand.errors': '{count} 个异常',
+        'brand.healthy': '健康',
+        'nav.monitor': '监控',
+        'nav.overview': '总览',
+        'nav.overviewMeta': '集群健康与资源容量',
+        'nav.activity': '活动记录',
+        'nav.activityMeta': '状态、配置、终端日志',
+        'nav.admin': '管理',
+        'nav.config': '配置',
+        'nav.configMeta': 'SSH 主机与运行设置',
+        'nav.servers': '服务器',
+        'nav.noHosts': '还没有监控主机。请在配置中添加 SSH 主机。',
+        'nav.needsAttention': '需要处理',
+        'nav.gpuHosts': 'GPU 主机',
+        'nav.generalHosts': '普通主机',
+        'nav.all': '全部',
+        'nav.edit': '编辑',
+        'nav.err': '异常',
+        'toolbar.interval': '间隔',
+        'toolbar.refresh': '刷新',
+        'toolbar.light': '亮色',
+        'toolbar.dark': '暗色',
+        'page.activityTitle': '活动记录',
+        'page.configTitle': '配置',
+        'page.hostDetail': '主机详情',
+        'page.overviewTitle': '总览',
+        'page.activitySubtitle': '从活动日志读取的事件',
+        'page.configSubtitle': '无需重启即可编辑 SSH 主机',
+        'page.waitingRefresh': '等待刷新',
+        'page.waitingHostData': '等待主机数据',
+        'overview.onlineHosts': '在线主机',
+        'overview.detectedGpus': '检测到的 GPU',
+        'overview.avgCpu': '平均 CPU',
+        'overview.avgGpu': '平均 GPU',
+        'overview.hosts': '主机',
+        'overview.waitingHosts': '等待主机数据...',
+        'activity.title': '活动日志',
+        'activity.subtitle': '主机状态、配置变更和终端会话。',
+        'activity.refresh': '刷新日志',
+        'activity.empty': '暂无活动记录。',
+        'config.runtime': '运行设置',
+        'config.refreshSeconds': '刷新秒数',
+        'config.configToken': '配置 Token',
+        'config.configTokenPlaceholder': '仅在已设置 Token 时需要',
+        'config.newTerminalToken': '新的终端 Token',
+        'config.keepBlank': '留空则保持不变',
+        'config.privacyMode': '隐私模式',
+        'config.enableTerminal': '启用网页终端',
+        'config.saveSettings': '保存设置',
+        'config.editSshHost': '编辑 SSH 主机',
+        'config.addSshHost': '添加 SSH 主机',
+        'config.newHost': '新建主机',
+        'config.name': '名称',
+        'config.hostIp': '主机 / IP',
+        'config.host': '主机',
+        'config.port': '端口',
+        'config.username': '用户名',
+        'config.user': '用户',
+        'config.password': '密码',
+        'config.sshPassword': 'SSH 密码',
+        'config.provider': '云厂商',
+        'config.region': '区域',
+        'config.notes': '备注',
+        'config.notesPlaceholder': '用途、负责人、实例规格或提醒',
+        'config.saveHost': '保存主机',
+        'config.addHost': '添加主机',
+        'config.configuredHosts': '已配置 SSH 主机',
+        'config.noConfiguredHosts': '暂无已配置主机。',
+        'config.passwordSet': '已设置',
+        'config.passwordEmpty': '为空',
+        'config.settingsSaved': '设置已保存',
+        'config.hostSaved': '主机已保存',
+        'config.loadFailed': '配置加载失败',
+        'config.saveFailed': '保存失败',
+        'config.deleteFailed': '删除失败',
+        'host.unavailable': '主机不可用',
+        'host.selectHost': '请从左侧选择主机。',
+        'host.disks': '磁盘',
+        'host.noDiskData': '暂无磁盘数据。',
+        'host.mount': '挂载点',
+        'host.used': '已用',
+        'host.total': '总量',
+        'host.usage': '使用率',
+        'host.notes': '备注',
+        'host.noNotes': '该主机暂无备注。',
+        'host.gpuDevices': 'GPU 设备',
+        'host.noGpuDetected': '该主机未检测到 GPU。',
+        'host.noGpuProcesses': '暂无 GPU 进程',
+        'terminal.token': 'Token',
+        'terminal.connect': '连接',
+        'terminal.disconnect': '断开',
+        'terminal.ready': 'GPUBeat 终端已就绪。',
+        'terminal.disconnected': '已断开',
+        'terminal.connecting': '正在连接 {host}...',
+        'terminal.connectingShort': '正在连接...',
+        'terminal.connected': '已连接',
+        'terminal.connectionFailed': '连接失败',
+        'terminal.error': '终端错误',
+        'terminal.sessionClosed': '会话已关闭。',
+        'terminal.dataRefreshFailed': '数据刷新失败',
+        'common.reset': '重置',
+        'common.clear': '清空',
+        'common.delete': '删除',
+        'common.edit': '编辑',
+        'metric.cpuShort': 'CPU',
+        'metric.memShort': '内存',
+        'metric.memory': '内存',
+        'metric.load': '负载',
+        'metric.rx': '接收',
+        'metric.tx': '发送',
+        'metric.util': '利用率',
+        'metric.vram': '显存',
+        'metric.watts': '功耗',
+        'unit.gpus': '{count} 张 GPU',
+        'status.online': '在线',
+        'status.error': '异常',
+        'status.unknown': '未知',
+        'level.info': '信息',
+        'level.warn': '警告',
+        'level.error': '错误',
+        'event.host_status': '主机状态',
+        'event.config_update': '配置更新',
+        'event.host_add': '添加主机',
+        'event.host_update': '更新主机',
+        'event.host_delete': '删除主机',
+        'event.terminal_open': '打开终端',
+        'event.terminal_close': '关闭终端',
+        'event.terminal_error': '终端错误',
+        'event.app_start': '应用启动'
+    }
+};
 
 new Vue({
     el: '#app',
     data: {
         gpustats: [],
         update_time: '',
-        currentTime: '',
-        currentDate: '',
-        refreshAgo: 0,
-        lastFetchTime: Date.now(),
-        refreshInterval: 3,
-        selectedHost: 'all',
-        theme: 'light',
-        timer: null,
-        clockTimer: null,
-        progressTimer: null,
-        barChart: null,
-        pieChart: null,
-        barHash: '',
-        pieHash: '',
+        view: localStorage.getItem('gpu-view') || 'overview',
+        language: localStorage.getItem('gpu-language') || getInitialLanguage(),
+        selectedHost: localStorage.getItem('gpu-selected-host') || '',
+        refreshInterval: Number(localStorage.getItem('gpu-refresh-interval') || 3),
+        layoutMode: localStorage.getItem('gpu-layout-mode') || 'auto',
+        theme: localStorage.getItem('gpu-theme') || 'light',
+        fetchTimer: null,
+        fetchInFlight: false,
+        payloadHash: '',
+        config: { server: {}, hosts: [] },
+        events: [],
+        configStatus: '',
+        configStatusKey: '',
+        editingHost: '',
+        hostForm: emptyHostForm(),
+        serverForm: { refresh: 3, privacy: false, terminal_enabled: false, terminal_token: '' },
         terminal: null,
         terminalFit: null,
         terminalSocket: null,
-        terminalHost: '',
-        terminalToken: '',
+        terminalToken: localStorage.getItem('gpu-terminal-token') || '',
         terminalConnected: false,
-        terminalStatus: 'Disconnected',
+        terminalConnecting: false,
+        terminalStatus: '',
+        terminalStatusKey: 'terminal.disconnected',
+        terminalStatusParams: {},
         terminalStatusType: '',
-        terminalResizeTimer: null
+        terminalResizeTimer: null,
+        terminalLastCols: 0,
+        terminalLastRows: 0,
+        terminalWriteBuffer: '',
+        terminalWriteFrame: null,
+        layoutOptions: [
+            { value: 'auto', label: 'Auto' },
+            { value: 'single', label: '1' },
+            { value: 'dual', label: '2' },
+            { value: 'quad', label: '4' },
+            { value: 'eight', label: '8' }
+        ]
     },
     computed: {
-        filteredStats: function() {
-            if (this.selectedHost === 'all') return this.gpustats;
+        currentHost: function() {
             var target = this.selectedHost;
-            return this.gpustats.filter(function(h) { return h.hostname === target; });
+            return this.gpustats.find(function(host) { return host.hostname === target; }) || null;
         },
-        hostOptions: function() {
-            return this.gpustats.map(function(h) { return { name: h.hostname, hostname: h.hostname }; });
+        pageTitle: function() {
+            if (this.view === 'activity') return this.t('page.activityTitle');
+            if (this.view === 'config') return this.t('page.configTitle');
+            if (this.view === 'host') return this.currentHost ? this.currentHost.hostname : this.t('page.hostDetail');
+            return this.t('page.overviewTitle');
+        },
+        pageSubtitle: function() {
+            if (this.view === 'activity') return this.t('page.activitySubtitle');
+            if (this.view === 'config') return this.t('page.configSubtitle');
+            if (this.view === 'host') return this.update_time || this.t('page.waitingRefresh');
+            return this.update_time || this.t('page.waitingHostData');
+        },
+        onlineCount: function() {
+            return this.gpustats.filter(function(host) { return host.status === 'online'; }).length;
         },
         errorCount: function() {
-            return this.gpustats.filter(function(h) { return h.status === 'error'; }).length;
+            return this.gpustats.filter(function(host) { return host.status === 'error'; }).length;
+        },
+        errorHosts: function() {
+            return sortHosts(this.gpustats.filter(function(host) {
+                return host.status !== 'online';
+            }));
+        },
+        gpuHosts: function() {
+            return sortHosts(this.gpustats.filter(function(host) {
+                return host.status === 'online' && (host.gpus || []).length > 0;
+            }));
+        },
+        genericHosts: function() {
+            return sortHosts(this.gpustats.filter(function(host) {
+                return host.status === 'online' && (host.gpus || []).length === 0;
+            }));
+        },
+        totalGpuCount: function() {
+            return this.gpustats.reduce(function(total, host) {
+                return total + ((host.gpus || []).length);
+            }, 0);
+        },
+        avgCPU: function() {
+            var values = this.gpustats.filter(function(host) {
+                return host.status === 'online' && host.sys;
+            }).map(function(host) {
+                return Number(host.sys.cpu_usage) || 0;
+            });
+            return average(values);
+        },
+        avgGPU: function() {
+            var values = [];
+            this.gpustats.forEach(function(host) {
+                (host.gpus || []).forEach(function(gpu) { values.push(Number(gpu['utilization.gpu']) || 0); });
+            });
+            return average(values);
+        },
+        effectiveLayout: function() {
+            if (this.layoutMode !== 'auto') return this.layoutMode;
+            var count = this.currentHost && this.currentHost.gpus ? this.currentHost.gpus.length : 0;
+            if (count <= 1) return 'single';
+            if (count <= 2) return 'dual';
+            if (count <= 4) return 'quad';
+            return 'eight';
+        },
+        terminalStatusText: function() {
+            return this.terminalStatusKey ? this.t(this.terminalStatusKey, this.terminalStatusParams) : this.terminalStatus;
+        },
+        configStatusText: function() {
+            return this.configStatusKey ? this.t(this.configStatusKey) : this.configStatus;
         }
     },
     mounted: function() {
-        var saved = localStorage.getItem('gpu-theme');
-        if (saved) {
-            this.theme = saved;
-            document.documentElement.setAttribute('data-theme', saved);
-        }
-        this.startClock();
-        this.fetchData();
+        document.documentElement.setAttribute('data-theme', this.theme);
+        document.documentElement.setAttribute('lang', this.language === 'zh' ? 'zh-CN' : 'en');
+        this.refreshAll();
         this.startAutoRefresh();
-        this.initTerminal();
-        this.terminalToken = localStorage.getItem('gpu-terminal-token') || '';
         var self = this;
-        window.addEventListener('resize', function() {
-            if (self.barChart) self.barChart.resize();
-            if (self.pieChart) self.pieChart.resize();
-            self.fitTerminal();
-        });
+        window.addEventListener('resize', this.fitTerminal);
+        this.$nextTick(function() { self.ensureTerminal(); });
     },
     beforeDestroy: function() {
         this.stopAutoRefresh();
-        this.stopProgress();
-        this.stopClock();
         this.disconnectTerminal();
+        window.removeEventListener('resize', this.fitTerminal);
+        if (this.terminalWriteFrame) cancelAnimationFrame(this.terminalWriteFrame);
     },
     methods: {
-        fmtMemMB: function(mb) {
-            if (!mb || mb <= 0) return '0 MB';
-            if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
-            return Math.round(mb) + ' MB';
+        t: function(key, params) {
+            var dict = I18N[this.language] || I18N.en;
+            var text = dict[key] || I18N.en[key] || key;
+            params = params || {};
+            return text.replace(/\{(\w+)\}/g, function(_, name) {
+                return params[name] !== undefined ? params[name] : '';
+            });
         },
-        fmtGB: function(mb) {
-            if (!mb && mb !== 0) return '-';
-            return (mb / 1024).toFixed(2) + ' GB';
+        setLanguage: function(language) {
+            this.language = I18N[language] ? language : 'en';
+            localStorage.setItem('gpu-language', this.language);
+            document.documentElement.setAttribute('lang', this.language === 'zh' ? 'zh-CN' : 'en');
+        },
+        statusLabel: function(status) {
+            var key = 'status.' + (status || 'unknown');
+            var label = this.t(key);
+            return label === key ? (status || this.t('status.unknown')) : label;
+        },
+        levelLabel: function(level) {
+            var key = 'level.' + (level || 'info');
+            var label = this.t(key);
+            return label === key ? (level || this.t('level.info')) : label;
+        },
+        eventTypeLabel: function(type) {
+            var key = 'event.' + type;
+            var label = this.t(key);
+            return label === key ? (type || '') : label;
+        },
+        setTerminalStatus: function(key, type, params, fallback) {
+            this.terminalStatusKey = key || '';
+            this.terminalStatusParams = params || {};
+            this.terminalStatus = fallback || '';
+            this.terminalStatusType = type || '';
+        },
+        setConfigStatus: function(key, fallback) {
+            this.configStatusKey = key || '';
+            this.configStatus = fallback || '';
+        },
+        setView: function(view) {
+            if (this.view === view) return;
+            if (view !== 'host') this.disposeTerminal();
+            this.view = view;
+            localStorage.setItem('gpu-view', view);
+            if (view === 'activity') this.fetchActivity();
+            if (view === 'config') this.fetchConfig();
+        },
+        selectHost: function(hostname) {
+            if (this.view === 'host' && this.selectedHost === hostname) return;
+            this.disposeTerminal();
+            this.view = 'host';
+            this.selectedHost = hostname;
+            localStorage.setItem('gpu-view', 'host');
+            localStorage.setItem('gpu-selected-host', hostname);
+            var self = this;
+            this.$nextTick(function() { self.ensureTerminal(); });
+        },
+        refreshAll: function() {
+            this.fetchData();
+            this.fetchConfig();
+            this.fetchActivity();
+        },
+        fetchData: function() {
+            if (this.fetchInFlight) return;
+            var self = this;
+            this.fetchInFlight = true;
+            fetch('/api/gpustats')
+                .then(function(resp) { return resp.json(); })
+                .then(function(data) {
+                    var nextStats = data.gpustats || [];
+                    var nextHash = JSON.stringify(nextStats);
+                    if (nextHash !== self.payloadHash) {
+                        self.payloadHash = nextHash;
+                        self.gpustats = nextStats;
+                    }
+                    self.update_time = data.update_time || '';
+                    if (self.view === 'host' && self.selectedHost && !self.currentHost) {
+                        self.setView('overview');
+                    }
+                    self.$nextTick(function() { self.ensureTerminal(); });
+                })
+                .catch(function(err) {
+                    console.error(err);
+                    self.setTerminalStatus('terminal.dataRefreshFailed', 'error');
+                })
+                .finally(function() {
+                    self.fetchInFlight = false;
+                });
+        },
+        fetchConfig: function() {
+            var self = this;
+            return fetch('/api/config')
+                .then(function(resp) { return resp.json(); })
+                .then(function(data) {
+                    self.config = data || { server: {}, hosts: [] };
+                    self.loadServerForm();
+                })
+                .catch(function(err) {
+                    console.error(err);
+                    self.setConfigStatus('config.loadFailed');
+                });
+        },
+        fetchActivity: function() {
+            var self = this;
+            return fetch('/api/activity?limit=200')
+                .then(function(resp) { return resp.json(); })
+                .then(function(data) { self.events = data.events || []; })
+                .catch(function(err) { console.error(err); });
+        },
+        apiHeaders: function() {
+            var headers = { 'Content-Type': 'application/json' };
+            if (this.terminalToken) headers['X-GPUBeat-Terminal-Token'] = this.terminalToken;
+            return headers;
+        },
+        loadServerForm: function() {
+            var server = this.config.server || {};
+            this.serverForm = {
+                refresh: server.refresh || this.refreshInterval || 3,
+                privacy: !!server.privacy,
+                terminal_enabled: !!server.terminal_enabled,
+                terminal_token: ''
+            };
+        },
+        saveServer: function() {
+            var self = this;
+            var body = {
+                refresh: Number(this.serverForm.refresh) || 3,
+                privacy: !!this.serverForm.privacy,
+                terminal_enabled: !!this.serverForm.terminal_enabled
+            };
+            if (this.serverForm.terminal_token !== '') {
+                body.terminal_token = this.serverForm.terminal_token;
+            }
+            fetch('/api/config/server', {
+                method: 'PUT',
+                headers: this.apiHeaders(),
+                body: JSON.stringify(body)
+            }).then(function(resp) {
+                if (!resp.ok) return resp.json().then(function(e) { throw new Error(e.error || self.t('config.saveFailed')); });
+                return resp.json();
+            }).then(function(server) {
+                self.config.server = server;
+                self.refreshInterval = server.refresh || self.refreshInterval;
+                self.startAutoRefresh();
+                self.serverForm.terminal_token = '';
+                self.setConfigStatus('config.settingsSaved');
+                self.fetchActivity();
+            }).catch(function(err) {
+                self.setConfigStatus('', err.message);
+            });
+        },
+        editHost: function(host) {
+            this.editingHost = host.name;
+            this.hostForm = {
+                name: host.name,
+                host: host.host,
+                port: host.port || 22,
+                username: host.username,
+                password: '',
+                provider: host.provider || '',
+                region: host.region || '',
+                notes: host.notes || ''
+            };
+        },
+        resetHostForm: function() {
+            this.editingHost = '';
+            this.hostForm = emptyHostForm();
+            this.setConfigStatus('');
+        },
+        saveHost: function() {
+            var self = this;
+            var method = this.editingHost ? 'PUT' : 'POST';
+            var url = this.editingHost ? '/api/config/hosts/' + encodeURIComponent(this.editingHost) : '/api/config/hosts';
+            fetch(url, {
+                method: method,
+                headers: this.apiHeaders(),
+                body: JSON.stringify(this.hostForm)
+            }).then(function(resp) {
+                if (!resp.ok) return resp.json().then(function(e) { throw new Error(e.error || self.t('config.saveFailed')); });
+                return resp.json();
+            }).then(function(saved) {
+                self.setConfigStatus('config.hostSaved');
+                self.editingHost = saved.name;
+                self.hostForm.password = '';
+                self.fetchConfig();
+                self.fetchData();
+                self.fetchActivity();
+            }).catch(function(err) {
+                self.setConfigStatus('', err.message);
+            });
+        },
+        deleteHost: function(name) {
+            if (!name) return;
+            var self = this;
+            fetch('/api/config/hosts/' + encodeURIComponent(name), {
+                method: 'DELETE',
+                headers: this.apiHeaders()
+            }).then(function(resp) {
+                if (!resp.ok) return resp.json().then(function(e) { throw new Error(e.error || self.t('config.deleteFailed')); });
+                return resp.json();
+            }).then(function() {
+                self.resetHostForm();
+                if (self.selectedHost === name) self.setView('overview');
+                self.fetchConfig();
+                self.fetchData();
+                self.fetchActivity();
+            }).catch(function(err) {
+                self.setConfigStatus('', err.message);
+            });
+        },
+        startAutoRefresh: function() {
+            this.stopAutoRefresh();
+            var self = this;
+            var seconds = Math.max(1, Number(this.refreshInterval) || 3);
+            this.refreshInterval = seconds;
+            this.fetchTimer = setInterval(function() {
+                self.fetchData();
+                if (self.view === 'activity') self.fetchActivity();
+            }, seconds * 1000);
+            localStorage.setItem('gpu-refresh-interval', String(seconds));
+        },
+        stopAutoRefresh: function() {
+            if (this.fetchTimer) {
+                clearInterval(this.fetchTimer);
+                this.fetchTimer = null;
+            }
+        },
+        setLayout: function(mode) {
+            this.layoutMode = mode;
+            localStorage.setItem('gpu-layout-mode', mode);
+            this.fitTerminal();
+        },
+        toggleTheme: function() {
+            this.theme = this.theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', this.theme);
+            localStorage.setItem('gpu-theme', this.theme);
         },
         fmtPercent: function(value) {
             return value || value === 0 ? Number(value).toFixed(1) + '%' : '-';
@@ -421,225 +1378,59 @@ new Vue({
         fmtLoad: function(value) {
             return value || value === 0 ? Number(value).toFixed(2) : '-';
         },
-        barColor: function(pct) {
-            if (pct > 70) return '#e74c3c';
-            if (pct > 30) return '#f39c12';
-            return '#2ecc71';
+        fmtMemMB: function(mb) {
+            mb = Number(mb) || 0;
+            return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : Math.round(mb) + ' MB';
         },
-        tempClass: function(t) {
-            if (!t) return '';
-            if (t > 70) return 'temp-high';
-            if (t > 40) return 'temp-mid';
-            return 'temp-low';
+        fmtGB: function(mb) {
+            return (Number(mb || 0) / 1024).toFixed(2) + ' GB';
         },
-        memClass: function(pct) {
-            if (pct > 70) return 'mem-high';
-            if (pct > 30) return 'mem-mid';
-            return 'mem-low';
+        fmtBytes: function(bytes) {
+            bytes = Number(bytes) || 0;
+            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return Math.round(bytes) + ' B';
         },
-        hostColor: function(index) {
-            return HOST_COLORS[index % HOST_COLORS.length];
-        },
-        hostColorByName: function(hostname) {
-            for (var i = 0; i < this.gpustats.length; i++) {
-                if (this.gpustats[i].hostname === hostname) return this.hostColor(i);
+        hostNavMeta: function(host) {
+            if (!host) return '';
+            var parts = [];
+            if (host.provider) parts.push(host.provider);
+            if (host.region) parts.push(host.region);
+            if (host.status === 'online' && host.sys) {
+                parts.push(this.t('metric.cpuShort') + ' ' + this.fmtPercent(host.sys.cpu_usage));
+                parts.push(this.t('metric.memShort') + ' ' + this.fmtPercent(host.sys.mem_percent));
             }
-            return HOST_COLORS[0];
+            if (parts.length === 0) parts.push(host.host || 'SSH');
+            return parts.join(' / ');
         },
-        startClock: function() {
-            var self = this;
-            function tick() {
-                var now = new Date();
-                self.currentDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-                self.currentTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
-                self.refreshAgo = Math.floor((Date.now() - self.lastFetchTime) / 1000);
-            }
-            tick();
-            this.clockTimer = setInterval(tick, 1000);
+        clampPercent: function(value) {
+            var pct = Math.max(0, Math.min(100, Number(value) || 0));
+            return pct.toFixed(1) + '%';
         },
-        stopClock: function() {
-            if (this.clockTimer) {
-                clearInterval(this.clockTimer);
-                this.clockTimer = null;
-            }
+        shortTime: function(value) {
+            return value ? value.replace(/^\d{4}-\d{2}-\d{2}\s*/, '') : '';
         },
-        fetchData: function() {
-            var self = this;
-            this.stopProgress();
-            if (self.$refs.progressRing) {
-                self.$refs.progressRing.style.strokeDashoffset = '43.98';
-            }
-            requestAnimationFrame(function() { self.startProgress(); });
-            fetch('/api/gpustats')
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    self.gpustats = data.gpustats || [];
-                    self.update_time = data.update_time || '';
-                    self.lastFetchTime = Date.now();
-                    if (!self.terminalHost && self.gpustats.length > 0) {
-                        self.terminalHost = self.gpustats[0].hostname;
-                    }
-                    self.$nextTick(function() {
-                        self.updateCharts();
-                        self.fitTerminal();
-                    });
-                })
-                .catch(function(err) {
-                    console.error(err);
-                    self.terminalStatus = 'Data refresh failed';
-                    self.terminalStatusType = 'error';
-                });
-        },
-        startAutoRefresh: function() {
-            this.stopAutoRefresh();
-            var self = this;
-            this.timer = setInterval(function() { self.fetchData(); }, Math.max(1, this.refreshInterval) * 1000);
-        },
-        stopAutoRefresh: function() {
-            if (this.timer) {
-                clearInterval(this.timer);
-                this.timer = null;
-            }
-        },
-        startProgress: function() {
-            var self = this;
-            var start = Date.now();
-            var total = Math.max(1, this.refreshInterval) * 1000;
-            this.progressTimer = setInterval(function() {
-                var pct = Math.min((Date.now() - start) / total, 1);
-                if (self.$refs.progressRing) {
-                    self.$refs.progressRing.style.strokeDashoffset = String(43.98 * (1 - pct));
-                }
-            }, 100);
-        },
-        stopProgress: function() {
-            if (this.progressTimer) {
-                clearInterval(this.progressTimer);
-                this.progressTimer = null;
-            }
-        },
-        toggleTheme: function() {
-            this.theme = this.theme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', this.theme);
-            localStorage.setItem('gpu-theme', this.theme);
-            this.barHash = '';
-            this.pieHash = '';
-            this.updateCharts();
-        },
-        chartTextColor: function() {
-            return this.theme === 'dark' ? '#a0b4c4' : '#636e72';
-        },
-        chartLineColor: function() {
-            return this.theme === 'dark' ? '#3d5570' : '#e0e0e0';
-        },
-        updateCharts: function() {
-            this.updateBarChart();
-            this.updatePieChart();
-        },
-        updateBarChart: function() {
-            var el = document.getElementById('barChart');
-            if (!el) return;
-            var userData = {};
-            var hostOrder = [];
-            this.filteredStats.forEach(function(host) {
-                if (host.status === 'error') return;
-                hostOrder.push(host.hostname);
-                (host.gpus || []).forEach(function(gpu) {
-                    (gpu.processes || []).forEach(function(proc) {
-                        var u = proc.username;
-                        if (!u || u === 'unknown' || u === 'root') return;
-                        if (!userData[u]) userData[u] = {};
-                        userData[u][host.hostname] = (userData[u][host.hostname] || 0) + proc.gpu_memory_usage;
-                    });
-                });
-            });
-            var users = Object.keys(userData).sort(function(a, b) {
-                var ta = 0, tb = 0;
-                Object.keys(userData[a]).forEach(function(k) { ta += userData[a][k]; });
-                Object.keys(userData[b]).forEach(function(k) { tb += userData[b][k]; });
-                return tb - ta;
-            });
-            var hash = JSON.stringify({users: users, hosts: hostOrder, data: userData, theme: this.theme});
-            if (hash === this.barHash && this.barChart) return;
-            this.barHash = hash;
-            if (!this.barChart) this.barChart = echarts.init(el);
-            if (users.length === 0) {
-                this.barChart.clear();
-                this.barChart.setOption({ title: { text: 'No process data', left: 'center', top: 'center', textStyle: { color: this.chartTextColor(), fontSize: 14 } } }, true);
+        ensureTerminal: function() {
+            if (this.view !== 'host' || !this.currentHost || this.currentHost.status !== 'online' || this.terminal) {
+                this.fitTerminal();
                 return;
             }
-            var self = this;
-            var series = hostOrder.map(function(h) {
-                return {
-                    name: h,
-                    type: 'bar',
-                    stack: 'mem',
-                    data: users.map(function(u) { return ((userData[u][h] || 0) / 1024).toFixed(2); }),
-                    itemStyle: { color: self.hostColorByName(h) }
-                };
-            });
-            this.barChart.setOption({
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                legend: { top: 0, textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll' },
-                grid: { left: 70, right: 20, top: 36, bottom: 80 },
-                xAxis: { type: 'category', data: users, axisLabel: { color: self.chartTextColor(), rotate: 45, fontSize: 11 } },
-                yAxis: { type: 'value', name: 'GB', nameTextStyle: { color: self.chartTextColor() }, axisLabel: { color: self.chartTextColor() }, splitLine: { lineStyle: { color: self.chartLineColor() } } },
-                series: series
-            }, true);
-        },
-        updatePieChart: function() {
-            var el = document.getElementById('pieChart');
-            if (!el) return;
-            var self = this;
-            var data = [];
-            this.filteredStats.forEach(function(host, hi) {
-                if (host.status === 'error') return;
-                (host.gpus || []).forEach(function(gpu) {
-                    data.push({
-                        name: host.hostname + ' GPU ' + gpu.index,
-                        value: gpu['memory.used'] || 0,
-                        itemStyle: { color: self.hostColor(hi) }
-                    });
-                });
-            });
-            var hash = JSON.stringify({data: data, theme: this.theme});
-            if (hash === this.pieHash && this.pieChart) return;
-            this.pieHash = hash;
-            if (!this.pieChart) this.pieChart = echarts.init(el);
-            if (data.length === 0) {
-                this.pieChart.clear();
-                this.pieChart.setOption({ title: { text: 'No GPU data', left: 'center', top: 'center', textStyle: { color: this.chartTextColor(), fontSize: 14 } } }, true);
-                return;
-            }
-            this.pieChart.setOption({
-                tooltip: { trigger: 'item', formatter: function(p) { return p.name + '<br>' + (p.value / 1024).toFixed(2) + ' GB'; } },
-                legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll' },
-                series: [{
-                    type: 'pie',
-                    radius: ['42%', '70%'],
-                    center: ['40%', '50%'],
-                    label: { color: self.chartTextColor(), fontSize: 11 },
-                    data: data
-                }]
-            }, true);
-        },
-        initTerminal: function() {
-            if (!window.Terminal || !this.$refs.terminalBox) {
-                this.terminalStatus = 'Terminal assets failed to load';
-                this.terminalStatusType = 'error';
-                return;
-            }
+            var box = this.$refs.terminalBox;
+            if (Array.isArray(box)) box = box[0];
+            if (!window.Terminal || !box) return;
             this.terminalFit = new FitAddon.FitAddon();
             this.terminal = new Terminal({
                 cursorBlink: true,
                 convertEol: true,
+                scrollback: 1000,
                 fontFamily: 'Consolas, "Cascadia Mono", monospace',
                 fontSize: 13,
-                theme: { background: '#0f1720', foreground: '#d6e2ee' }
+                theme: { background: '#0b1220', foreground: '#d6e2ee' }
             });
             this.terminal.loadAddon(this.terminalFit);
-            this.terminal.open(this.$refs.terminalBox);
-            this.terminal.writeln('GPUBeat terminal ready. Select a host and connect.');
+            this.terminal.open(box);
+            this.terminal.writeln(this.t('terminal.ready'));
             var self = this;
             this.terminal.onData(function(data) {
                 if (self.terminalSocket && self.terminalSocket.readyState === WebSocket.OPEN) {
@@ -648,76 +1439,155 @@ new Vue({
             });
             this.fitTerminal();
         },
+        disposeTerminal: function() {
+            this.closeTerminalSocket(false);
+            this.resetTerminalOutput();
+            if (this.terminal) {
+                this.terminal.dispose();
+                this.terminal = null;
+            }
+            this.terminalFit = null;
+            this.terminalLastCols = 0;
+            this.terminalLastRows = 0;
+            this.terminalConnected = false;
+            this.terminalConnecting = false;
+            this.setTerminalStatus('terminal.disconnected');
+        },
+        resetTerminalOutput: function() {
+            this.terminalWriteBuffer = '';
+            if (this.terminalWriteFrame) {
+                cancelAnimationFrame(this.terminalWriteFrame);
+                this.terminalWriteFrame = null;
+            }
+            if (this.terminal) {
+                if (this.terminal.reset) this.terminal.reset();
+                this.terminal.clear();
+            }
+        },
         fitTerminal: function() {
             var self = this;
             clearTimeout(this.terminalResizeTimer);
             this.terminalResizeTimer = setTimeout(function() {
-                if (!self.terminalFit || !self.terminal) return;
-                self.terminalFit.fit();
-                if (self.terminalSocket && self.terminalSocket.readyState === WebSocket.OPEN) {
-                    self.terminalSocket.send(JSON.stringify({ type: 'resize', cols: self.terminal.cols, rows: self.terminal.rows }));
-                }
+                self.applyTerminalFit();
             }, 80);
         },
-        connectTerminal: function() {
-            if (!this.terminal || !this.terminalHost || this.terminalConnected) return;
-            var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-            this.saveTerminalToken();
-            var url = protocol + window.location.host + '/api/terminal?host=' + encodeURIComponent(this.terminalHost) + '&cols=' + this.terminal.cols + '&rows=' + this.terminal.rows;
-            if (this.terminalToken) {
-                url += '&token=' + encodeURIComponent(this.terminalToken);
+        applyTerminalFit: function() {
+            if (!this.terminal || !this.terminalFit) return;
+            try {
+                this.terminalFit.fit();
+            } catch (err) {
+                return;
             }
+            if (!this.terminal.cols || !this.terminal.rows) return;
+            if (this.terminalSocket && this.terminalSocket.readyState === WebSocket.OPEN && (this.terminal.cols !== this.terminalLastCols || this.terminal.rows !== this.terminalLastRows)) {
+                this.terminalLastCols = this.terminal.cols;
+                this.terminalLastRows = this.terminal.rows;
+                this.terminalSocket.send(JSON.stringify({ type: 'resize', cols: this.terminal.cols, rows: this.terminal.rows }));
+            }
+        },
+        closeTerminalSocket: function(sendClose) {
+            var socket = this.terminalSocket;
+            if (!socket) return;
+            this.terminalSocket = null;
+            if (sendClose && socket.readyState === WebSocket.OPEN) {
+                try {
+                    socket.send(JSON.stringify({ type: 'close' }));
+                } catch (err) {}
+            }
+            try {
+                socket.close();
+            } catch (err) {}
+        },
+        connectTerminal: function() {
+            if (!this.currentHost || !this.terminal || this.terminalConnected || this.terminalConnecting) return;
+            this.saveTerminalToken();
+            this.closeTerminalSocket(false);
+            this.resetTerminalOutput();
+            this.applyTerminalFit();
+            var cols = this.terminal.cols || 100;
+            var rows = this.terminal.rows || 30;
+            var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            var url = protocol + window.location.host + '/api/terminal?host=' + encodeURIComponent(this.currentHost.hostname) + '&cols=' + cols + '&rows=' + rows;
+            if (this.terminalToken) url += '&token=' + encodeURIComponent(this.terminalToken);
             var self = this;
-            this.terminalStatus = 'Connecting to ' + this.terminalHost + '...';
-            this.terminalStatusType = '';
-            this.terminalSocket = new WebSocket(url);
-            this.terminalSocket.onopen = function() {
+            var socket = new WebSocket(url);
+            this.terminalSocket = socket;
+            this.terminalLastCols = cols;
+            this.terminalLastRows = rows;
+            this.terminalConnected = false;
+            this.terminalConnecting = true;
+            this.setTerminalStatus('terminal.connecting', '', {host: this.currentHost.hostname});
+            this.terminal.writeln(this.t('terminal.connectingShort'));
+            socket.onopen = function() {
+                if (self.terminalSocket !== socket) return;
                 self.terminalConnected = true;
-                self.terminalStatus = 'Connected to ' + self.terminalHost;
-                self.terminalStatusType = '';
-                self.terminal.writeln('\r\nConnected to ' + self.terminalHost);
-                self.fitTerminal();
+                self.terminalConnecting = false;
+                self.setTerminalStatus('terminal.connected');
+                if (self.terminal) self.terminal.clear();
+                self.applyTerminalFit();
+                requestAnimationFrame(function() {
+                    if (self.terminalSocket === socket) self.applyTerminalFit();
+                });
             };
-            this.terminalSocket.onmessage = function(event) {
+            socket.onmessage = function(event) {
+                if (self.terminalSocket !== socket) return;
                 var msg;
                 try {
                     msg = JSON.parse(event.data);
                 } catch (err) {
-                    self.terminal.write(event.data);
+                    self.queueTerminalWrite(event.data);
                     return;
                 }
                 if (msg.type === 'output') {
-                    self.terminal.write(msg.data || '');
+                    self.queueTerminalWrite(msg.data || '');
                 } else if (msg.type === 'error') {
-                    self.terminal.writeln('\r\n' + (msg.data || 'Terminal error'));
-                    self.terminalStatus = msg.data || 'Terminal error';
-                    self.terminalStatusType = 'error';
+                    self.terminalConnecting = false;
+                    self.terminalConnected = false;
+                    if (self.terminal) self.terminal.writeln('\r\n' + (msg.data || self.t('terminal.error')));
+                    self.setTerminalStatus('', 'error', {}, msg.data || self.t('terminal.error'));
                 } else if (msg.type === 'close') {
-                    self.terminal.writeln('\r\nSession closed.');
+                    if (self.terminal) self.terminal.writeln('\r\n' + self.t('terminal.sessionClosed'));
                 }
             };
-            this.terminalSocket.onerror = function() {
-                self.terminalStatus = 'Connection failed. Check server.terminal settings.';
-                self.terminalStatusType = 'error';
-            };
-            this.terminalSocket.onclose = function() {
+            socket.onerror = function() {
+                if (self.terminalSocket !== socket) return;
                 self.terminalConnected = false;
-                if (self.terminalStatusType !== 'error') {
-                    self.terminalStatus = 'Disconnected';
-                }
+                self.terminalConnecting = false;
+                self.setTerminalStatus('terminal.connectionFailed', 'error');
             };
+            socket.onclose = function() {
+                if (self.terminalSocket !== socket) return;
+                self.terminalSocket = null;
+                self.terminalConnected = false;
+                self.terminalConnecting = false;
+                if (self.terminalStatusType !== 'error') self.setTerminalStatus('terminal.disconnected');
+            };
+        },
+        queueTerminalWrite: function(text) {
+            if (!text) return;
+            this.terminalWriteBuffer += text;
+            if (this.terminalWriteFrame) return;
+            var self = this;
+            this.terminalWriteFrame = requestAnimationFrame(function() {
+                self.terminalWriteFrame = null;
+                if (!self.terminal || !self.terminalWriteBuffer) return;
+                var chunk = self.terminalWriteBuffer;
+                self.terminalWriteBuffer = '';
+                self.terminal.write(chunk);
+            });
         },
         disconnectTerminal: function() {
-            if (this.terminalSocket) {
-                if (this.terminalSocket.readyState === WebSocket.OPEN) {
-                    this.terminalSocket.send(JSON.stringify({ type: 'close' }));
-                }
-                this.terminalSocket.close();
-                this.terminalSocket = null;
-            }
+            this.closeTerminalSocket(true);
             this.terminalConnected = false;
+            this.terminalConnecting = false;
+            if (this.terminalStatusType !== 'error') this.setTerminalStatus('terminal.disconnected');
         },
         clearTerminal: function() {
+            this.terminalWriteBuffer = '';
+            if (this.terminalWriteFrame) {
+                cancelAnimationFrame(this.terminalWriteFrame);
+                this.terminalWriteFrame = null;
+            }
             if (this.terminal) this.terminal.clear();
         },
         saveTerminalToken: function() {
@@ -732,14 +1602,45 @@ new Vue({
         refreshInterval: function() {
             this.startAutoRefresh();
         },
-        selectedHost: function() {
-            this.barHash = '';
-            this.pieHash = '';
+        view: function() {
             var self = this;
-            this.$nextTick(function() { self.updateCharts(); });
+            this.$nextTick(function() { self.ensureTerminal(); });
+        },
+        selectedHost: function() {
+            var self = this;
+            this.$nextTick(function() { self.ensureTerminal(); });
         }
     }
 });
+
+function emptyHostForm() {
+    return {
+        name: '',
+        host: '',
+        port: 22,
+        username: '',
+        password: '',
+        provider: '',
+        region: '',
+        notes: ''
+    };
+}
+
+function average(values) {
+    if (!values.length) return 0;
+    return values.reduce(function(total, value) { return total + value; }, 0) / values.length;
+}
+
+function sortHosts(hosts) {
+    return hosts.slice().sort(function(a, b) {
+        return String(a.hostname || '').localeCompare(String(b.hostname || ''));
+    });
+}
+
+function getInitialLanguage() {
+    var lang = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+    return lang.indexOf('zh') === 0 ? 'zh' : 'en';
+}
 </script>
 </body>
 </html>

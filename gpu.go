@@ -8,17 +8,17 @@ import (
 )
 
 type GPUInfo struct {
-	Index         int            `json:"index"`
-	Name          string         `json:"name"`
-	Temperature   float64        `json:"temperature.gpu"`
-	Utilization   float64        `json:"utilization.gpu"`
-	MemoryUsed    float64        `json:"memory.used"`
-	MemoryTotal   float64        `json:"memory.total"`
-	MemoryPercent float64        `json:"memory"`
-	PowerDraw     float64        `json:"power.draw"`
-	PowerLimit    float64        `json:"enforced.power.limit"`
-	Processes     []ProcessInfo  `json:"processes"`
-	UserProcesses string         `json:"user_processes"`
+	Index         int           `json:"index"`
+	Name          string        `json:"name"`
+	Temperature   float64       `json:"temperature.gpu"`
+	Utilization   float64       `json:"utilization.gpu"`
+	MemoryUsed    float64       `json:"memory.used"`
+	MemoryTotal   float64       `json:"memory.total"`
+	MemoryPercent float64       `json:"memory"`
+	PowerDraw     float64       `json:"power.draw"`
+	PowerLimit    float64       `json:"enforced.power.limit"`
+	Processes     []ProcessInfo `json:"processes"`
+	UserProcesses string        `json:"user_processes"`
 }
 
 type ProcessInfo struct {
@@ -38,14 +38,31 @@ type SysInfo struct {
 	Load15     float64 `json:"load_15"`
 }
 
+type DiskInfo struct {
+	Mount      string  `json:"mount"`
+	SizeMB     float64 `json:"size_mb"`
+	UsedMB     float64 `json:"used_mb"`
+	UsePercent float64 `json:"use_percent"`
+}
+
+type NetInfo struct {
+	RXBytes float64 `json:"rx_bytes"`
+	TXBytes float64 `json:"tx_bytes"`
+}
+
 type HostGPUData struct {
-	Hostname string    `json:"hostname"`
-	Host     string    `json:"host"`
-	Status   string    `json:"status"`
-	Error    string    `json:"error,omitempty"`
-	GPUs     []GPUInfo `json:"gpus"`
-	Sys      SysInfo   `json:"sys"`
-	Order    int       `json:"-"`
+	Hostname string     `json:"hostname"`
+	Host     string     `json:"host"`
+	Provider string     `json:"provider,omitempty"`
+	Region   string     `json:"region,omitempty"`
+	Notes    string     `json:"notes,omitempty"`
+	Status   string     `json:"status"`
+	Error    string     `json:"error,omitempty"`
+	GPUs     []GPUInfo  `json:"gpus"`
+	Sys      SysInfo    `json:"sys"`
+	Disks    []DiskInfo `json:"disks"`
+	Net      NetInfo    `json:"net"`
+	Order    int        `json:"-"`
 }
 
 func ParseGPUData(rawOutput, hostname, host string) *HostGPUData {
@@ -54,41 +71,41 @@ func ParseGPUData(rawOutput, hostname, host string) *HostGPUData {
 		Host:     host,
 		Status:   "online",
 		GPUs:     []GPUInfo{},
+		Disks:    []DiskInfo{},
 	}
 
-	gpuSection := rawOutput
-	processSection := ""
-	userSection := ""
-	sysSection := ""
-
-	if idx := strings.Index(rawOutput, "===SYSINFO==="); idx >= 0 {
-		sysSection = rawOutput[idx+len("===SYSINFO==="):]
-		rawOutput = rawOutput[:idx]
+	sections := splitMonitorSections(rawOutput)
+	gpuSection := sections["GPU"]
+	if gpuSection == "" {
+		gpuSection = sections[""]
 	}
 
-	if idx := strings.Index(rawOutput, "===PROCESSES==="); idx >= 0 {
-		gpuSection = rawOutput[:idx]
-		rest := rawOutput[idx+len("===PROCESSES==="):]
-		if idx2 := strings.Index(rest, "===USERS==="); idx2 >= 0 {
-			processSection = rest[:idx2]
-			userSection = rest[idx2+len("===USERS==="):]
-		} else {
-			processSection = rest
-		}
-	}
-
-	userMap := parseUserSection(userSection)
+	userMap := parseUserSection(sections["USERS"])
 	busMap := make(map[string]int)
 	result.GPUs = parseGPUSection(gpuSection, busMap)
-	assignProcesses(processSection, busMap, userMap, result.GPUs)
-	result.Sys = parseSysSection(sysSection)
-
-	if len(result.GPUs) == 0 && gpuSection != "" {
-		result.Status = "error"
-		result.Error = fmt.Sprintf("数据解析异常: 未检测到GPU信息")
-	}
+	assignProcesses(sections["PROCESSES"], busMap, userMap, result.GPUs)
+	result.Sys = parseSysSection(sections["SYSINFO"])
+	result.Disks = parseDiskSection(sections["DISKS"])
+	result.Net = parseNetSection(sections["NET"])
 
 	return result
+}
+
+func splitMonitorSections(raw string) map[string]string {
+	sections := make(map[string]string)
+	current := "GPU"
+	for _, line := range strings.Split(raw, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "===") && strings.HasSuffix(trimmed, "===") {
+			current = strings.ToUpper(strings.TrimSpace(strings.Trim(trimmed, "=")))
+			if _, ok := sections[current]; !ok {
+				sections[current] = ""
+			}
+			continue
+		}
+		sections[current] += line + "\n"
+	}
+	return sections
 }
 
 func parseGPUSection(section string, busMap map[string]int) []GPUInfo {
@@ -119,7 +136,7 @@ func parseGPUSection(section string, busMap map[string]int) []GPUInfo {
 			memPercent = roundToOne(memUsed / memTotal * 100)
 		}
 
-		gpu := GPUInfo{
+		gpus = append(gpus, GPUInfo{
 			Index:         idx,
 			Name:          fields[2],
 			Temperature:   safeFloat(fields[3]),
@@ -131,8 +148,7 @@ func parseGPUSection(section string, busMap map[string]int) []GPUInfo {
 			PowerLimit:    safeFloat(fields[9]),
 			Processes:     []ProcessInfo{},
 			UserProcesses: "-",
-		}
-		gpus = append(gpus, gpu)
+		})
 	}
 	return gpus
 }
@@ -233,8 +249,48 @@ func parseSysSection(section string) SysInfo {
 	return sys
 }
 
+func parseDiskSection(section string) []DiskInfo {
+	disks := []DiskInfo{}
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ",")
+		if len(fields) < 4 {
+			continue
+		}
+		for i := range fields {
+			fields[i] = strings.TrimSpace(fields[i])
+		}
+		disks = append(disks, DiskInfo{
+			Mount:      fields[0],
+			SizeMB:     safeFloat(fields[1]),
+			UsedMB:     safeFloat(fields[2]),
+			UsePercent: safeFloat(strings.TrimSuffix(fields[3], "%")),
+		})
+	}
+	return disks
+}
+
+func parseNetSection(section string) NetInfo {
+	var net NetInfo
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(line)
+		upper := strings.ToUpper(line)
+		if strings.HasPrefix(upper, "RX:") || strings.HasPrefix(upper, "RX_BYTES:") {
+			net.RXBytes = safeFloat(line[strings.Index(line, ":")+1:])
+		} else if strings.HasPrefix(upper, "TX:") || strings.HasPrefix(upper, "TX_BYTES:") {
+			net.TXBytes = safeFloat(line[strings.Index(line, ":")+1:])
+		}
+	}
+	return net
+}
+
 func safeFloat(s string) float64 {
-	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "[N/A]", "0")
+	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return 0
 	}
@@ -255,6 +311,8 @@ func anonymizeUsername(name string) string {
 	if name == "" || name == "unknown" || name == "-" {
 		return name
 	}
+	usernameMu.Lock()
+	defer usernameMu.Unlock()
 	if mapped, ok := usernameMap[name]; ok {
 		return mapped
 	}

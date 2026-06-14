@@ -1,4 +1,7 @@
 config.yaml
 dist/
 *.exe
+*~
+.cache/
+log/
 .claude/

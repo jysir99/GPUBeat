@@ -25,8 +25,9 @@ type terminalOpener interface {
 }
 
 type TerminalHandler struct {
-	cfg    *Config
-	opener terminalOpener
+	store    *ConfigStore
+	opener   terminalOpener
+	activity *ActivityLog
 }
 
 type terminalClientMessage struct {
@@ -41,12 +42,12 @@ type terminalServerMessage struct {
 	Data string `json:"data,omitempty"`
 }
 
-func NewTerminalHandler(cfg *Config, opener terminalOpener) *TerminalHandler {
-	return &TerminalHandler{cfg: cfg, opener: opener}
+func NewTerminalHandler(store *ConfigStore, opener terminalOpener, activity *ActivityLog) *TerminalHandler {
+	return &TerminalHandler{store: store, opener: opener, activity: activity}
 }
 
 func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.cfg == nil || !h.cfg.Server.Terminal.Enabled {
+	if h.store == nil || !h.store.Terminal().Enabled {
 		http.Error(w, "terminal is disabled", http.StatusForbidden)
 		return
 	}
@@ -75,9 +76,16 @@ func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	session, err := h.opener.OpenTerminal(hostCfg, parsePositiveInt(r.URL.Query().Get("cols"), 100), parsePositiveInt(r.URL.Query().Get("rows"), 30))
 	if err != nil {
 		_ = ws.WriteJSON(terminalServerMessage{Type: "error", Data: err.Error()})
+		if h.activity != nil {
+			h.activity.Add("error", "terminal_error", hostCfg.Name, "Terminal failed: "+err.Error(), map[string]string{"host": hostCfg.Host})
+		}
 		return
 	}
 	defer session.Close()
+	if h.activity != nil {
+		h.activity.Add("info", "terminal_open", hostCfg.Name, "Terminal opened for "+hostCfg.Name, map[string]string{"host": hostCfg.Host})
+		defer h.activity.Add("info", "terminal_close", hostCfg.Name, "Terminal closed for "+hostCfg.Name, map[string]string{"host": hostCfg.Host})
+	}
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -136,7 +144,7 @@ func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TerminalHandler) authorized(r *http.Request) bool {
-	token := h.cfg.Server.Terminal.Token
+	token := h.store.Terminal().Token
 	if token == "" {
 		return true
 	}
@@ -151,12 +159,7 @@ func (h *TerminalHandler) findHost(name string) (HostConfig, bool) {
 	if name == "" {
 		return HostConfig{}, false
 	}
-	for _, host := range h.cfg.Hosts {
-		if host.Name == name {
-			return host, true
-		}
-	}
-	return HostConfig{}, false
+	return h.store.FindHost(name)
 }
 
 func parsePositiveInt(value string, fallback int) int {

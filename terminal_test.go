@@ -98,7 +98,7 @@ func (s *fakeTerminalSession) send(text string) {
 func TestTerminalRejectsDisabledAndUnknownHosts(t *testing.T) {
 	cfg := terminalTestConfig(false)
 	opener := &fakeTerminalOpener{}
-	handler := NewTerminalHandler(cfg, opener)
+	handler := NewTerminalHandler(NewConfigStore("", cfg), opener, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/terminal?host=gpu-1", nil)
 	rr := httptest.NewRecorder()
@@ -111,6 +111,7 @@ func TestTerminalRejectsDisabledAndUnknownHosts(t *testing.T) {
 	}
 
 	cfg.Server.Terminal.Enabled = true
+	handler = NewTerminalHandler(NewConfigStore("", cfg), opener, nil)
 	req = httptest.NewRequest(http.MethodGet, "/api/terminal?host=missing", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -126,7 +127,7 @@ func TestTerminalRequiresTokenWhenConfigured(t *testing.T) {
 	cfg := terminalTestConfig(true)
 	cfg.Server.Terminal.Token = "let-me-in"
 	opener := &fakeTerminalOpener{}
-	handler := NewTerminalHandler(cfg, opener)
+	handler := NewTerminalHandler(NewConfigStore("", cfg), opener, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/terminal?host=gpu-1", nil)
 	rr := httptest.NewRecorder()
@@ -151,7 +152,7 @@ func TestTerminalWebSocketForwardsOutputInputAndResizeThroughMiddleware(t *testi
 	cfg := terminalTestConfig(true)
 	session := newFakeTerminalSession()
 	opener := &fakeTerminalOpener{session: session}
-	handler := NewTerminalHandler(cfg, opener)
+	handler := NewTerminalHandler(NewConfigStore("", cfg), opener, nil)
 	server := httptest.NewServer(loggingMiddleware(handler.ServeHTTP, nil))
 	defer server.Close()
 	defer session.Close()
@@ -197,7 +198,7 @@ func TestTerminalWebSocketAcceptsConfiguredToken(t *testing.T) {
 	cfg.Server.Terminal.Token = "let-me-in"
 	session := newFakeTerminalSession()
 	opener := &fakeTerminalOpener{session: session}
-	handler := NewTerminalHandler(cfg, opener)
+	handler := NewTerminalHandler(NewConfigStore("", cfg), opener, nil)
 	server := httptest.NewServer(loggingMiddleware(handler.ServeHTTP, nil))
 	defer server.Close()
 	defer session.Close()
