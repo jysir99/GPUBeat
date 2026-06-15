@@ -209,6 +209,83 @@ func TestTerminalWebSocketAcceptsConfiguredToken(t *testing.T) {
 	waitForOpenerCalls(t, opener, 1)
 }
 
+func TestTerminalPersistentSessionListsAndReattaches(t *testing.T) {
+	cfg := terminalTestConfig(true)
+	session := newFakeTerminalSession()
+	opener := &fakeTerminalOpener{session: session}
+	handler := NewTerminalHandler(NewConfigStore("", cfg), opener, nil)
+	server := httptest.NewServer(loggingMiddleware(handler.ServeHTTP, nil))
+	defer server.Close()
+	defer handler.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/terminal/sessions?host=gpu-1&cols=90&rows=22", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d: %s", rr.Code, http.StatusCreated, rr.Body.String())
+	}
+	var info terminalSessionInfo
+	if err := json.NewDecoder(rr.Body).Decode(&info); err != nil {
+		t.Fatal(err)
+	}
+	if info.ID == "" || info.Host != "gpu-1" {
+		t.Fatalf("created session = %#v", info)
+	}
+	waitForOpenerCalls(t, opener, 1)
+	opener.assertLastOpen(t, "gpu-1", 90, 22)
+
+	go session.send("buffered output")
+
+	req = httptest.NewRequest(http.MethodGet, "/api/terminal/sessions?host=gpu-1", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	var list struct {
+		Sessions []terminalSessionInfo `json:"sessions"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Sessions) != 1 || list.Sessions[0].ID != info.ID {
+		t.Fatalf("listed sessions = %#v", list.Sessions)
+	}
+
+	ws, conn, cleanup := dialWebSocket(t, server.URL, "/api/terminal?host=gpu-1&session="+url.QueryEscape(info.ID)+"&cols=120&rows=40")
+	defer cleanup()
+
+	waitForOpenerCalls(t, opener, 1)
+	var out terminalServerMessage
+	readServerJSON(t, ws, &out)
+	if out.Type != "output" || out.Data != "buffered output" || out.SessionID != info.ID {
+		t.Fatalf("reattach replay = %#v", out)
+	}
+
+	writeClientJSON(t, conn, terminalClientMessage{Type: "detach"})
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/terminal/sessions/"+url.PathEscape(info.ID), nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/terminal/sessions?host=gpu-1", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list after delete status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	list.Sessions = nil
+	if err := json.NewDecoder(rr.Body).Decode(&list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Sessions) != 0 {
+		t.Fatalf("sessions after delete = %#v", list.Sessions)
+	}
+}
+
 func waitForOpenerCalls(t *testing.T, opener *fakeTerminalOpener, want int) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)

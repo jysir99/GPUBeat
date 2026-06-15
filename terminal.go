@@ -13,9 +13,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const websocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -28,6 +30,7 @@ type TerminalHandler struct {
 	store    *ConfigStore
 	opener   terminalOpener
 	activity *ActivityLog
+	manager  *TerminalManager
 }
 
 type terminalClientMessage struct {
@@ -38,31 +41,110 @@ type terminalClientMessage struct {
 }
 
 type terminalServerMessage struct {
-	Type string `json:"type"`
-	Data string `json:"data,omitempty"`
+	Type      string `json:"type"`
+	Data      string `json:"data,omitempty"`
+	SessionID string `json:"session,omitempty"`
+}
+
+type terminalSessionInfo struct {
+	ID        string `json:"id"`
+	Host      string `json:"host"`
+	Title     string `json:"title"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	Attached  int    `json:"attached"`
 }
 
 func NewTerminalHandler(store *ConfigStore, opener terminalOpener, activity *ActivityLog) *TerminalHandler {
-	return &TerminalHandler{store: store, opener: opener, activity: activity}
+	return &TerminalHandler{
+		store:    store,
+		opener:   opener,
+		activity: activity,
+		manager:  NewTerminalManager(opener, activity),
+	}
 }
 
 func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil || !h.store.Terminal().Enabled {
-		http.Error(w, "terminal is disabled", http.StatusForbidden)
-		return
-	}
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusForbidden, "terminal is disabled")
 		return
 	}
 	if !h.authorized(r) {
-		http.Error(w, "terminal token is invalid", http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, "terminal token is invalid")
+		return
+	}
+
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	switch {
+	case path == "/api/terminal":
+		h.serveWebSocket(w, r)
+	case path == "/api/terminal/sessions":
+		h.serveSessionList(w, r)
+	case strings.HasPrefix(path, "/api/terminal/sessions/"):
+		sessionID, err := url.PathUnescape(strings.TrimPrefix(path, "/api/terminal/sessions/"))
+		if err != nil || sessionID == "" {
+			writeJSONError(w, http.StatusBadRequest, "invalid terminal session id")
+			return
+		}
+		h.serveSession(w, r, sessionID)
+	default:
+		writeJSONError(w, http.StatusNotFound, "not found")
+	}
+}
+
+func (h *TerminalHandler) Close() {
+	if h.manager != nil {
+		h.manager.CloseAll()
+	}
+}
+
+func (h *TerminalHandler) serveSessionList(w http.ResponseWriter, r *http.Request) {
+	hostCfg, ok := h.findHost(r.URL.Query().Get("host"))
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "unknown host")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"sessions": h.manager.List(hostCfg.Name),
+		})
+	case http.MethodPost:
+		session, err := h.manager.Create(hostCfg, parsePositiveInt(r.URL.Query().Get("cols"), 100), parsePositiveInt(r.URL.Query().Get("rows"), 30))
+		if err != nil {
+			writeJSONError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusCreated, session.Info())
+	default:
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *TerminalHandler) serveSession(w http.ResponseWriter, r *http.Request, sessionID string) {
+	switch r.Method {
+	case http.MethodDelete:
+		info, ok := h.manager.Close(sessionID, "terminal session closed")
+		if !ok {
+			writeJSONError(w, http.StatusNotFound, "terminal session not found")
+			return
+		}
+		writeJSON(w, http.StatusOK, info)
+	default:
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *TerminalHandler) serveWebSocket(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	hostCfg, ok := h.findHost(r.URL.Query().Get("host"))
 	if !ok {
-		http.Error(w, "unknown host", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "unknown host")
 		return
 	}
 
@@ -73,19 +155,34 @@ func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	session, err := h.opener.OpenTerminal(hostCfg, parsePositiveInt(r.URL.Query().Get("cols"), 100), parsePositiveInt(r.URL.Query().Get("rows"), 30))
-	if err != nil {
-		_ = ws.WriteJSON(terminalServerMessage{Type: "error", Data: err.Error()})
-		if h.activity != nil {
-			h.activity.Add("error", "terminal_error", hostCfg.Name, "Terminal failed: "+err.Error(), map[string]string{"host": hostCfg.Host})
+	cols := parsePositiveInt(r.URL.Query().Get("cols"), 100)
+	rows := parsePositiveInt(r.URL.Query().Get("rows"), 30)
+	sessionID := strings.TrimSpace(r.URL.Query().Get("session"))
+	ephemeral := sessionID == ""
+	var session *managedTerminalSession
+	if ephemeral {
+		session, err = h.manager.Create(hostCfg, cols, rows)
+		if err != nil {
+			_ = ws.WriteJSON(terminalServerMessage{Type: "error", Data: err.Error()})
+			return
 		}
+		defer h.manager.Close(session.ID(), "terminal session closed")
+	} else {
+		var ok bool
+		session, ok = h.manager.Get(sessionID)
+		if !ok || session.Host() != hostCfg.Name {
+			_ = ws.WriteJSON(terminalServerMessage{Type: "error", Data: "terminal session not found"})
+			return
+		}
+		_ = session.Resize(cols, rows)
+	}
+
+	client, replay, ok := session.Attach()
+	if !ok {
+		_ = ws.WriteJSON(terminalServerMessage{Type: "error", Data: "terminal session is closed", SessionID: session.ID()})
 		return
 	}
-	defer session.Close()
-	if h.activity != nil {
-		h.activity.Add("info", "terminal_open", hostCfg.Name, "Terminal opened for "+hostCfg.Name, map[string]string{"host": hostCfg.Host})
-		defer h.activity.Add("info", "terminal_close", hostCfg.Name, "Terminal closed for "+hostCfg.Name, map[string]string{"host": hostCfg.Host})
-	}
+	defer session.Detach(client)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -94,28 +191,13 @@ func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = ws.Close()
 	}()
 
-	var writeMu sync.Mutex
 	go func() {
-		buf := make([]byte, 8192)
-		for {
-			n, err := session.Read(buf)
-			if n > 0 {
-				writeMu.Lock()
-				_ = ws.WriteJSON(terminalServerMessage{Type: "output", Data: string(buf[:n])})
-				writeMu.Unlock()
-			}
-			if err != nil {
-				writeMu.Lock()
-				_ = ws.WriteJSON(terminalServerMessage{Type: "close", Data: "terminal session ended"})
-				writeMu.Unlock()
-				cancel()
-				return
-			}
+		if replay != "" {
+			_ = ws.WriteJSON(terminalServerMessage{Type: "output", Data: replay, SessionID: session.ID()})
 		}
-	}()
-
-	go func() {
-		_ = session.Wait()
+		for msg := range client {
+			_ = ws.WriteJSON(msg)
+		}
 		cancel()
 	}()
 
@@ -138,6 +220,9 @@ func (h *TerminalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case "resize":
 			_ = session.Resize(msg.Cols, msg.Rows)
 		case "close":
+			_, _ = h.manager.Close(session.ID(), "terminal session closed")
+			return
+		case "detach":
 			return
 		}
 	}
@@ -160,6 +245,279 @@ func (h *TerminalHandler) findHost(name string) (HostConfig, bool) {
 		return HostConfig{}, false
 	}
 	return h.store.FindHost(name)
+}
+
+const terminalReplayLimit = 256 * 1024
+
+type TerminalManager struct {
+	mu       sync.RWMutex
+	opener   terminalOpener
+	activity *ActivityLog
+	sessions map[string]*managedTerminalSession
+	byHost   map[string][]string
+	nextID   uint64
+	nextSeq  map[string]int
+}
+
+func NewTerminalManager(opener terminalOpener, activity *ActivityLog) *TerminalManager {
+	return &TerminalManager{
+		opener:   opener,
+		activity: activity,
+		sessions: make(map[string]*managedTerminalSession),
+		byHost:   make(map[string][]string),
+		nextSeq:  make(map[string]int),
+	}
+}
+
+func (m *TerminalManager) Create(hostCfg HostConfig, cols, rows int) (*managedTerminalSession, error) {
+	session, err := m.opener.OpenTerminal(hostCfg, cols, rows)
+	if err != nil {
+		if m.activity != nil {
+			m.activity.Add("error", "terminal_error", hostCfg.Name, "Terminal failed: "+err.Error(), map[string]string{"host": hostCfg.Host})
+		}
+		return nil, err
+	}
+
+	m.mu.Lock()
+	m.nextID++
+	m.nextSeq[hostCfg.Name]++
+	id := fmt.Sprintf("term-%d-%d", time.Now().UnixNano(), m.nextID)
+	title := fmt.Sprintf("Terminal %d", m.nextSeq[hostCfg.Name])
+	managed := &managedTerminalSession{
+		id:        id,
+		host:      hostCfg.Name,
+		hostAddr:  hostCfg.Host,
+		title:     title,
+		session:   session,
+		createdAt: time.Now(),
+		updatedAt: time.Now(),
+		clients:   make(map[chan terminalServerMessage]struct{}),
+		manager:   m,
+	}
+	m.sessions[id] = managed
+	m.byHost[hostCfg.Name] = append(m.byHost[hostCfg.Name], id)
+	m.mu.Unlock()
+
+	if m.activity != nil {
+		m.activity.Add("info", "terminal_open", hostCfg.Name, title+" opened for "+hostCfg.Name, map[string]string{
+			"host":    hostCfg.Host,
+			"session": id,
+			"title":   title,
+		})
+	}
+	managed.Start()
+	return managed, nil
+}
+
+func (m *TerminalManager) List(host string) []terminalSessionInfo {
+	m.mu.RLock()
+	ids := append([]string(nil), m.byHost[host]...)
+	sessions := make([]*managedTerminalSession, 0, len(ids))
+	for _, id := range ids {
+		if session, ok := m.sessions[id]; ok {
+			sessions = append(sessions, session)
+		}
+	}
+	m.mu.RUnlock()
+
+	out := make([]terminalSessionInfo, 0, len(sessions))
+	for _, session := range sessions {
+		out = append(out, session.Info())
+	}
+	return out
+}
+
+func (m *TerminalManager) Get(id string) (*managedTerminalSession, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	session, ok := m.sessions[id]
+	return session, ok
+}
+
+func (m *TerminalManager) Close(id, reason string) (terminalSessionInfo, bool) {
+	session, ok := m.Get(id)
+	if !ok {
+		return terminalSessionInfo{}, false
+	}
+	info := session.Info()
+	session.Close(reason)
+	return info, true
+}
+
+func (m *TerminalManager) CloseAll() {
+	m.mu.RLock()
+	sessions := make([]*managedTerminalSession, 0, len(m.sessions))
+	for _, session := range m.sessions {
+		sessions = append(sessions, session)
+	}
+	m.mu.RUnlock()
+	for _, session := range sessions {
+		session.Close("terminal session closed")
+	}
+}
+
+func (m *TerminalManager) remove(id string) {
+	m.mu.Lock()
+	session, ok := m.sessions[id]
+	if ok {
+		delete(m.sessions, id)
+		ids := m.byHost[session.Host()]
+		for i, existing := range ids {
+			if existing == id {
+				m.byHost[session.Host()] = append(ids[:i], ids[i+1:]...)
+				break
+			}
+		}
+		if len(m.byHost[session.Host()]) == 0 {
+			delete(m.byHost, session.Host())
+		}
+	}
+	m.mu.Unlock()
+}
+
+type managedTerminalSession struct {
+	mu        sync.Mutex
+	id        string
+	host      string
+	hostAddr  string
+	title     string
+	session   TerminalSession
+	createdAt time.Time
+	updatedAt time.Time
+	buffer    []byte
+	clients   map[chan terminalServerMessage]struct{}
+	closed    bool
+	closeOnce sync.Once
+	manager   *TerminalManager
+}
+
+func (s *managedTerminalSession) ID() string {
+	return s.id
+}
+
+func (s *managedTerminalSession) Host() string {
+	return s.host
+}
+
+func (s *managedTerminalSession) Start() {
+	go func() {
+		buf := make([]byte, 8192)
+		for {
+			n, err := s.session.Read(buf)
+			if n > 0 {
+				s.broadcast(terminalServerMessage{Type: "output", Data: string(buf[:n]), SessionID: s.id})
+			}
+			if err != nil {
+				s.finish("terminal session ended")
+				return
+			}
+		}
+	}()
+
+	go func() {
+		_ = s.session.Wait()
+		s.finish("terminal session ended")
+	}()
+}
+
+func (s *managedTerminalSession) Info() terminalSessionInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return terminalSessionInfo{
+		ID:        s.id,
+		Host:      s.host,
+		Title:     s.title,
+		CreatedAt: s.createdAt.Format(time.RFC3339),
+		UpdatedAt: s.updatedAt.Format(time.RFC3339),
+		Attached:  len(s.clients),
+	}
+}
+
+func (s *managedTerminalSession) Attach() (chan terminalServerMessage, string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, "", false
+	}
+	client := make(chan terminalServerMessage, 256)
+	s.clients[client] = struct{}{}
+	s.updatedAt = time.Now()
+	return client, string(s.buffer), true
+}
+
+func (s *managedTerminalSession) Detach(client chan terminalServerMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.clients[client]; ok {
+		delete(s.clients, client)
+		close(client)
+		s.updatedAt = time.Now()
+	}
+}
+
+func (s *managedTerminalSession) Write(p []byte) (int, error) {
+	return s.session.Write(p)
+}
+
+func (s *managedTerminalSession) Resize(cols, rows int) error {
+	return s.session.Resize(cols, rows)
+}
+
+func (s *managedTerminalSession) Close(reason string) {
+	s.finish(reason)
+}
+
+func (s *managedTerminalSession) broadcast(msg terminalServerMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	if msg.Type == "output" && msg.Data != "" {
+		s.buffer = append(s.buffer, []byte(msg.Data)...)
+		if len(s.buffer) > terminalReplayLimit {
+			s.buffer = append([]byte(nil), s.buffer[len(s.buffer)-terminalReplayLimit:]...)
+		}
+	}
+	s.updatedAt = time.Now()
+	for client := range s.clients {
+		select {
+		case client <- msg:
+		default:
+		}
+	}
+}
+
+func (s *managedTerminalSession) finish(reason string) {
+	s.closeOnce.Do(func() {
+		_ = s.session.Close()
+
+		s.mu.Lock()
+		s.closed = true
+		s.updatedAt = time.Now()
+		clients := s.clients
+		s.clients = make(map[chan terminalServerMessage]struct{})
+		msg := terminalServerMessage{Type: "close", Data: reason, SessionID: s.id}
+		for client := range clients {
+			select {
+			case client <- msg:
+			default:
+			}
+			close(client)
+		}
+		s.mu.Unlock()
+
+		if s.manager != nil {
+			if s.manager.activity != nil {
+				s.manager.activity.Add("info", "terminal_close", s.host, s.title+" closed for "+s.host, map[string]string{
+					"host":    s.hostAddr,
+					"session": s.id,
+					"title":   s.title,
+				})
+			}
+			s.manager.remove(s.id)
+		}
+	})
 }
 
 func parsePositiveInt(value string, fallback int) int {

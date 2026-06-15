@@ -3,5 +3,7 @@ dist/
 *.exe
 *~
 .cache/
+.gocache/
+.gopath/
 log/
 .claude/

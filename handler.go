@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -12,7 +13,7 @@ import (
 	"time"
 )
 
-//go:embed web/index.html
+//go:embed web/*
 var webFS embed.FS
 
 type Cache struct {
@@ -45,6 +46,18 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	data, _ := webFS.ReadFile("web/index.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(data)
+}
+
+func serveWebAsset(assetPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := webFS.ReadFile(assetPath)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		http.ServeContent(w, r, assetPath, time.Time{}, bytes.NewReader(data))
+	}
 }
 
 func handleGPUStats(w http.ResponseWriter, r *http.Request) {

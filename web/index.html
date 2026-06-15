@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GPUBeat</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
     <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
@@ -256,6 +259,22 @@
         .empty { padding: 44px 16px; text-align: center; color: var(--muted); }
         .terminal-panel { padding: 12px; }
         .terminal-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+        .terminal-tabs { display: flex; gap: 6px; align-items: center; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border-soft); }
+        .terminal-tab {
+            min-width: 116px;
+            max-width: 180px;
+            height: 34px;
+            padding: 0 10px;
+            border-radius: 8px;
+            background: var(--panel-soft);
+            color: var(--muted);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            text-align: left;
+        }
+        .terminal-tab.active { color: var(--accent); border-color: var(--accent); background: rgba(0, 122, 255, 0.1); }
+        .terminal-tab-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 760; }
+        .terminal-tab-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--subtle); }
         .terminal-status { margin-left: auto; color: var(--muted); font-size: 12px; }
         .terminal-status.connected { color: var(--green); }
         .terminal-status.error { color: var(--red); }
@@ -716,10 +735,18 @@
                             </section>
 
                             <section class="section panel terminal-panel">
+                                <div class="terminal-tabs" v-if="terminalSessions.length">
+                                    <button class="terminal-tab" v-for="session in terminalSessions" :key="session.id" :class="{active: session.id === terminalSessionID}" @click="attachTerminalSession(session.id)">
+                                        <span class="terminal-tab-title">{{ session.title }}</span>
+                                        <span class="terminal-tab-meta">{{ t('terminal.attached', {count: session.attached || 0}) }}</span>
+                                    </button>
+                                </div>
                                 <div class="terminal-toolbar">
                                     <input class="field" style="max-width:220px" type="password" v-model="terminalToken" :placeholder="t('terminal.token')" :disabled="terminalConnected || terminalConnecting" @change="saveTerminalToken">
-                                    <button class="btn" @click="connectTerminal" :disabled="terminalConnected || terminalConnecting">{{ t('terminal.connect') }}</button>
-                                    <button class="btn danger" @click="disconnectTerminal" :disabled="!terminalConnected && !terminalConnecting">{{ t('terminal.disconnect') }}</button>
+                                    <button class="btn" @click="connectTerminal" :disabled="terminalConnecting">{{ t('terminal.newSession') }}</button>
+                                    <button class="btn secondary" @click="disconnectTerminal" :disabled="!terminalConnected && !terminalConnecting">{{ t('terminal.detach') }}</button>
+                                    <button class="btn danger" @click="closeActiveTerminal" :disabled="!terminalSessionID">{{ t('terminal.closeSession') }}</button>
+                                    <button class="btn secondary" @click="fetchTerminalSessions" :disabled="terminalSessionsLoading">{{ t('terminal.refreshSessions') }}</button>
                                     <button class="btn secondary" @click="clearTerminal">{{ t('common.clear') }}</button>
                                     <span class="terminal-status" :class="{connected: terminalConnected, error: terminalStatusType === 'error'}">{{ terminalStatusText }}</span>
                                 </div>
@@ -830,6 +857,13 @@ var I18N = {
         'terminal.token': 'Token',
         'terminal.connect': 'Connect',
         'terminal.disconnect': 'Disconnect',
+        'terminal.newSession': 'New',
+        'terminal.detach': 'Detach',
+        'terminal.closeSession': 'Close',
+        'terminal.refreshSessions': 'Refresh',
+        'terminal.attached': '{count} attached',
+        'terminal.sessionsLoadFailed': 'Session list failed',
+        'terminal.sessionCreateFailed': 'Session create failed',
         'terminal.ready': 'GPUBeat terminal ready.',
         'terminal.disconnected': 'Disconnected',
         'terminal.connecting': 'Connecting to {host}...',
@@ -962,6 +996,13 @@ var I18N = {
         'terminal.token': 'Token',
         'terminal.connect': '连接',
         'terminal.disconnect': '断开',
+        'terminal.newSession': '新建',
+        'terminal.detach': '分离',
+        'terminal.closeSession': '关闭',
+        'terminal.refreshSessions': '刷新',
+        'terminal.attached': '{count} 个连接',
+        'terminal.sessionsLoadFailed': '会话列表加载失败',
+        'terminal.sessionCreateFailed': '会话创建失败',
         'terminal.ready': 'GPUBeat 终端已就绪。',
         'terminal.disconnected': '已断开',
         'terminal.connecting': '正在连接 {host}...',
@@ -1027,6 +1068,9 @@ new Vue({
         terminal: null,
         terminalFit: null,
         terminalSocket: null,
+        terminalSessions: [],
+        terminalSessionsLoading: false,
+        terminalSessionID: '',
         terminalToken: localStorage.getItem('gpu-terminal-token') || '',
         terminalConnected: false,
         terminalConnecting: false,
@@ -1113,6 +1157,9 @@ new Vue({
             if (count <= 4) return 'quad';
             return 'eight';
         },
+        terminalEnabled: function() {
+            return !!(this.config.server && this.config.server.terminal_enabled);
+        },
         terminalStatusText: function() {
             return this.terminalStatusKey ? this.t(this.terminalStatusKey, this.terminalStatusParams) : this.terminalStatus;
         },
@@ -1127,7 +1174,10 @@ new Vue({
         this.startAutoRefresh();
         var self = this;
         window.addEventListener('resize', this.fitTerminal);
-        this.$nextTick(function() { self.ensureTerminal(); });
+        this.$nextTick(function() {
+            self.ensureTerminal();
+            if (self.terminalEnabled && self.currentHost && self.currentHost.status === 'online') self.fetchTerminalSessions();
+        });
     },
     beforeDestroy: function() {
         this.stopAutoRefresh();
@@ -1185,12 +1235,17 @@ new Vue({
         selectHost: function(hostname) {
             if (this.view === 'host' && this.selectedHost === hostname) return;
             this.disposeTerminal();
+            this.terminalSessions = [];
+            this.terminalSessionID = '';
             this.view = 'host';
             this.selectedHost = hostname;
             localStorage.setItem('gpu-view', 'host');
             localStorage.setItem('gpu-selected-host', hostname);
             var self = this;
-            this.$nextTick(function() { self.ensureTerminal(); });
+            this.$nextTick(function() {
+                self.ensureTerminal();
+                if (self.terminalEnabled) self.fetchTerminalSessions();
+            });
         },
         refreshAll: function() {
             this.fetchData();
@@ -1231,6 +1286,7 @@ new Vue({
                 .then(function(data) {
                     self.config = data || { server: {}, hosts: [] };
                     self.loadServerForm();
+                    if (self.view === 'host' && self.terminalEnabled && self.currentHost && self.currentHost.status === 'online') self.fetchTerminalSessions();
                 })
                 .catch(function(err) {
                     console.error(err);
@@ -1491,27 +1547,78 @@ new Vue({
             this.terminalSocket = null;
             if (sendClose && socket.readyState === WebSocket.OPEN) {
                 try {
-                    socket.send(JSON.stringify({ type: 'close' }));
+                    socket.send(JSON.stringify({ type: 'detach' }));
                 } catch (err) {}
             }
             try {
                 socket.close();
             } catch (err) {}
         },
-        connectTerminal: function() {
-            if (!this.currentHost || !this.terminal || this.terminalConnected || this.terminalConnecting) return;
+        terminalAPIPath: function(path) {
+            var host = this.currentHost ? this.currentHost.hostname : '';
+            var url = path + (path.indexOf('?') === -1 ? '?' : '&') + 'host=' + encodeURIComponent(host);
+            if (this.terminalToken) url += '&token=' + encodeURIComponent(this.terminalToken);
+            return url;
+        },
+        fetchTerminalSessions: function() {
+            if (!this.currentHost) return Promise.resolve();
+            var self = this;
             this.saveTerminalToken();
-            this.closeTerminalSocket(false);
+            this.terminalSessionsLoading = true;
+            return fetch(this.terminalAPIPath('/api/terminal/sessions'), {
+                headers: this.apiHeaders()
+            }).then(function(resp) {
+                if (!resp.ok) return resp.json().then(function(e) { throw new Error(e.error || self.t('terminal.sessionsLoadFailed')); });
+                return resp.json();
+            }).then(function(data) {
+                self.terminalSessions = data.sessions || [];
+                var exists = self.terminalSessions.some(function(session) { return session.id === self.terminalSessionID; });
+                if (!exists && !self.terminalConnected && !self.terminalConnecting) self.terminalSessionID = '';
+            }).catch(function(err) {
+                console.error(err);
+                self.setTerminalStatus('', 'error', {}, err.message || self.t('terminal.sessionsLoadFailed'));
+            }).finally(function() {
+                self.terminalSessionsLoading = false;
+            });
+        },
+        connectTerminal: function() {
+            if (!this.currentHost || !this.terminal || this.terminalConnecting) return;
+            this.saveTerminalToken();
+            this.closeTerminalSocket(true);
+            this.resetTerminalOutput();
+            this.applyTerminalFit();
+            var cols = this.terminal.cols || 100;
+            var rows = this.terminal.rows || 30;
+            var self = this;
+            fetch(this.terminalAPIPath('/api/terminal/sessions?cols=' + cols + '&rows=' + rows), {
+                method: 'POST',
+                headers: this.apiHeaders()
+            }).then(function(resp) {
+                if (!resp.ok) return resp.json().then(function(e) { throw new Error(e.error || self.t('terminal.sessionCreateFailed')); });
+                return resp.json();
+            }).then(function(session) {
+                self.terminalSessions = self.terminalSessions.filter(function(existing) { return existing.id !== session.id; }).concat([session]);
+                self.attachTerminalSession(session.id);
+            }).catch(function(err) {
+                console.error(err);
+                self.setTerminalStatus('', 'error', {}, err.message || self.t('terminal.sessionCreateFailed'));
+            });
+        },
+        attachTerminalSession: function(sessionID) {
+            if (!this.currentHost || !this.terminal || !sessionID || this.terminalConnecting) return;
+            this.saveTerminalToken();
+            this.closeTerminalSocket(true);
             this.resetTerminalOutput();
             this.applyTerminalFit();
             var cols = this.terminal.cols || 100;
             var rows = this.terminal.rows || 30;
             var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-            var url = protocol + window.location.host + '/api/terminal?host=' + encodeURIComponent(this.currentHost.hostname) + '&cols=' + cols + '&rows=' + rows;
+            var url = protocol + window.location.host + '/api/terminal?host=' + encodeURIComponent(this.currentHost.hostname) + '&session=' + encodeURIComponent(sessionID) + '&cols=' + cols + '&rows=' + rows;
             if (this.terminalToken) url += '&token=' + encodeURIComponent(this.terminalToken);
             var self = this;
             var socket = new WebSocket(url);
             this.terminalSocket = socket;
+            this.terminalSessionID = sessionID;
             this.terminalLastCols = cols;
             this.terminalLastRows = rows;
             this.terminalConnected = false;
@@ -1524,6 +1631,7 @@ new Vue({
                 self.terminalConnecting = false;
                 self.setTerminalStatus('terminal.connected');
                 if (self.terminal) self.terminal.clear();
+                self.fetchTerminalSessions();
                 self.applyTerminalFit();
                 requestAnimationFrame(function() {
                     if (self.terminalSocket === socket) self.applyTerminalFit();
@@ -1547,6 +1655,7 @@ new Vue({
                     self.setTerminalStatus('', 'error', {}, msg.data || self.t('terminal.error'));
                 } else if (msg.type === 'close') {
                     if (self.terminal) self.terminal.writeln('\r\n' + self.t('terminal.sessionClosed'));
+                    if (self.terminalEnabled) self.fetchTerminalSessions();
                 }
             };
             socket.onerror = function() {
@@ -1560,6 +1669,7 @@ new Vue({
                 self.terminalSocket = null;
                 self.terminalConnected = false;
                 self.terminalConnecting = false;
+                if (self.terminalEnabled) self.fetchTerminalSessions();
                 if (self.terminalStatusType !== 'error') self.setTerminalStatus('terminal.disconnected');
             };
         },
@@ -1581,6 +1691,30 @@ new Vue({
             this.terminalConnected = false;
             this.terminalConnecting = false;
             if (this.terminalStatusType !== 'error') this.setTerminalStatus('terminal.disconnected');
+            if (this.terminalEnabled) this.fetchTerminalSessions();
+        },
+        closeActiveTerminal: function() {
+            if (!this.terminalSessionID) return;
+            var sessionID = this.terminalSessionID;
+            var self = this;
+            this.closeTerminalSocket(false);
+            fetch('/api/terminal/sessions/' + encodeURIComponent(sessionID) + (this.terminalToken ? '?token=' + encodeURIComponent(this.terminalToken) : ''), {
+                method: 'DELETE',
+                headers: this.apiHeaders()
+            }).then(function(resp) {
+                if (!resp.ok) return resp.json().then(function(e) { throw new Error(e.error || self.t('terminal.error')); });
+                return resp.json();
+            }).then(function() {
+                self.terminalSessionID = '';
+                self.terminalConnected = false;
+                self.terminalConnecting = false;
+                self.setTerminalStatus('terminal.disconnected');
+                self.resetTerminalOutput();
+                self.fetchTerminalSessions();
+            }).catch(function(err) {
+                console.error(err);
+                self.setTerminalStatus('', 'error', {}, err.message || self.t('terminal.error'));
+            });
         },
         clearTerminal: function() {
             this.terminalWriteBuffer = '';

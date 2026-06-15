@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="GPUBeat icon">
+  <defs>
+    <linearGradient id="bg" x1="38" y1="30" x2="218" y2="226" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="0.55" stop-color="#123b6e"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="68" y1="74" x2="188" y2="182" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#172033"/>
+      <stop offset="1" stop-color="#07111f"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="220" height="220" rx="48" fill="url(#bg)"/>
+  <rect x="18" y="18" width="220" height="220" rx="48" fill="none" stroke="#7dd3fc" stroke-width="7"/>
+  <g fill="#7dd3fc">
+    <rect x="78" y="51" width="16" height="22" rx="5"/>
+    <rect x="112" y="48" width="16" height="25" rx="5"/>
+    <rect x="146" y="51" width="16" height="22" rx="5"/>
+    <rect x="78" y="183" width="16" height="22" rx="5"/>
+    <rect x="112" y="183" width="16" height="25" rx="5"/>
+    <rect x="146" y="183" width="16" height="22" rx="5"/>
+    <rect x="48" y="92" width="23" height="16" rx="5"/>
+    <rect x="48" y="124" width="23" height="16" rx="5"/>
+    <rect x="48" y="156" width="23" height="16" rx="5"/>
+    <rect x="185" y="92" width="23" height="16" rx="5"/>
+    <rect x="185" y="124" width="23" height="16" rx="5"/>
+    <rect x="185" y="156" width="23" height="16" rx="5"/>
+  </g>
+  <rect x="66" y="72" width="124" height="112" rx="18" fill="url(#chip)" stroke="#38bdf8" stroke-width="7"/>
+  <path d="M85 130h21l12-27 19 54 14-35h21" fill="none" stroke="#a7f3d0" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="85" cy="130" r="7" fill="#22c55e"/>
+  <circle cx="172" cy="122" r="7" fill="#22c55e"/>
+</svg>
