@@ -234,7 +234,7 @@
                     <span class="host-tag" :style="{background: hostColor(hi)}"></span>
                     {{ host.hostname }}
                 </div>
-                <div class="error-card-inner" style="flex:1">{{ errorIcon(host.error) }} {{ host.error }}</div>
+                <div class="error-card-inner" style="flex:1">{{ errorIcon(host.error_code) }} {{ errorText(host.error_code) }}</div>
             </div>
             <div v-else v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index"
                  class="gpu-card" :style="{'border-left-color': hostColor(hi)}">
@@ -296,13 +296,13 @@
                                         <span class="sep-sys">{{ t('host.memory') }} <span class="sys-mem-val">{{ fmtMemMB(host.sys.mem_used) }}/{{ fmtMemMB(host.sys.mem_total) }}</span> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.mem_percent + '%', background: host.sys.mem_percent > 85 ? '#e74c3c' : host.sys.mem_percent > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
                                         <span class="sep-sys">{{ t('host.load') }} <strong>{{ host.sys.load_1.toFixed(2) }} / {{ host.sys.load_5.toFixed(2) }} / {{ host.sys.load_15.toFixed(2) }}</strong></span>
                                     </template>
-                                    <span v-if="host.status === 'error'" style="color:#e74c3c;margin-left:8px">{{ errorIcon(host.error) }} {{ host.error }}</span>
+                                    <span v-if="host.status === 'error'" style="color:#e74c3c;margin-left:8px">{{ errorIcon(host.error_code) }} {{ errorText(host.error_code) }}</span>
                                     <span v-if="host.status === 'online'" class="view-detail" @click="openModal(host, hi)">{{ t('host.viewDetail') }}</span>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="host.status === 'error'" class="error-row">
-                            <td colspan="7">{{ errorIcon(host.error) }} {{ host.error }}</td>
+                            <td colspan="7">{{ errorIcon(host.error_code) }} {{ errorText(host.error_code) }}</td>
                         </tr>
                         <tr v-for="gpu in host.gpus" :key="host.hostname + '-' + gpu.index">
                             <td>
@@ -411,7 +411,16 @@ var I18N = {
         'chart.noProcModal': '暂无进程',
         'chart.noGpu': '暂无GPU数据',
         'chart.total': '合计: ',
-        'chart.used': '已用: '
+        'chart.used': '已用: ',
+        'error.ssh.connect': 'SSH连接失败',
+        'error.ssh.auth': 'SSH认证失败',
+        'error.ssh.reconnect': 'SSH重连失败',
+        'error.ssh.session': 'SSH会话创建失败',
+        'error.nvsmi.notfound': 'nvidia-smi未安装',
+        'error.nvsmi.failed': 'nvidia-smi执行失败',
+        'error.cmd.failed': '命令执行失败',
+        'error.parse': '数据解析异常',
+        'error.unknown': '未知错误'
     },
     en: {
         'nav.allHosts': 'All hosts',
@@ -443,7 +452,16 @@ var I18N = {
         'chart.noProcModal': 'No processes',
         'chart.noGpu': 'No GPU data',
         'chart.total': 'Total: ',
-        'chart.used': 'Used: '
+        'chart.used': 'Used: ',
+        'error.ssh.connect': 'SSH connection failed',
+        'error.ssh.auth': 'SSH authentication failed',
+        'error.ssh.reconnect': 'SSH reconnection failed',
+        'error.ssh.session': 'SSH session creation failed',
+        'error.nvsmi.notfound': 'nvidia-smi not installed',
+        'error.nvsmi.failed': 'nvidia-smi execution failed',
+        'error.cmd.failed': 'Command execution failed',
+        'error.parse': 'Data parsing error',
+        'error.unknown': 'Unknown error'
     }
 };
 
@@ -524,6 +542,24 @@ new Vue({
                 }
             }
             return text;
+        },
+        errorText: function(code) {
+            var key = 'error.' + (code || 'unknown');
+            var dict = I18N[this.language] || I18N.en;
+            return dict[key] || I18N.en['error.unknown'] || (code || '');
+        },
+        errorIcon: function(code) {
+            switch (code) {
+                case 'ssh.connect':
+                case 'ssh.reconnect':
+                case 'ssh.session': return '🔌';
+                case 'ssh.auth': return '🔑';
+                case 'nvsmi.notfound': return '⚙';
+                case 'nvsmi.failed':
+                case 'cmd.failed': return '💻';
+                case 'parse': return '📊';
+                default: return '⚠';
+            }
         },
         setLanguage: function(lang) {
             this.language = lang;
@@ -652,15 +688,6 @@ new Vue({
             if (pct > 70) return 'mem-high';
             if (pct > 30) return 'mem-mid';
             return 'mem-low';
-        },
-        errorIcon: function(err) {
-            if (!err) return '⚠';
-            if (err.indexOf('SSH连接失败') === 0) return '🔌';
-            if (err.indexOf('SSH认证失败') === 0) return '🔑';
-            if (err.indexOf('nvidia-smi未安装') === 0) return '⚙';
-            if (err.indexOf('nvidia-smi执行失败') === 0) return '💻';
-            if (err.indexOf('数据解析异常') === 0) return '📊';
-            return '⚠';
         },
         chartTextColor: function() {
             return this.theme === 'dark' ? '#a0b4c4' : '#636e72';

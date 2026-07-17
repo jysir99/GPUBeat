@@ -41,7 +41,7 @@ func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, 
 			Notes:      hostCfg.Notes,
 			Status:     "error",
 			Error:      err.Error(),
-			ErrorBrief: briefError(err.Error()),
+			ErrorCode:  errorCode(err),
 			GPUs:       []GPUInfo{},
 			Order:      idx,
 		}
