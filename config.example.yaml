@@ -10,6 +10,10 @@ hosts:
     port: 22
     username: "root"
     password: "your-password"
+    # 可选字段(公开可见,请勿填写敏感信息):
+    # provider: "Tencent Cloud"   # 云厂商/供应商
+    # region: "ap-guangzhou"      # 地域
+    # notes: "A100 x8"            # 备注
 
   # - name: "gpu-server-2"
   #   host: "192.168.1.101"

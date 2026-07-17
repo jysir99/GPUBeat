@@ -25,6 +25,9 @@ type HostConfig struct {
 	Port     int    `yaml:"port"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
+	Provider string `yaml:"provider,omitempty"`
+	Region   string `yaml:"region,omitempty"`
+	Notes    string `yaml:"notes,omitempty"`
 }
 
 func LoadConfig(path string) (*Config, error) {

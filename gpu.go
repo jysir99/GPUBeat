@@ -8,17 +8,17 @@ import (
 )
 
 type GPUInfo struct {
-	Index         int            `json:"index"`
-	Name          string         `json:"name"`
-	Temperature   float64        `json:"temperature.gpu"`
-	Utilization   float64        `json:"utilization.gpu"`
-	MemoryUsed    float64        `json:"memory.used"`
-	MemoryTotal   float64        `json:"memory.total"`
-	MemoryPercent float64        `json:"memory"`
-	PowerDraw     float64        `json:"power.draw"`
-	PowerLimit    float64        `json:"enforced.power.limit"`
-	Processes     []ProcessInfo  `json:"processes"`
-	UserProcesses string         `json:"user_processes"`
+	Index         int           `json:"index"`
+	Name          string        `json:"name"`
+	Temperature   float64       `json:"temperature.gpu"`
+	Utilization   float64       `json:"utilization.gpu"`
+	MemoryUsed    float64       `json:"memory.used"`
+	MemoryTotal   float64       `json:"memory.total"`
+	MemoryPercent float64       `json:"memory"`
+	PowerDraw     float64       `json:"power.draw"`
+	PowerLimit    float64       `json:"enforced.power.limit"`
+	Processes     []ProcessInfo `json:"processes"`
+	UserProcesses string        `json:"user_processes"`
 }
 
 type ProcessInfo struct {
@@ -41,6 +41,9 @@ type SysInfo struct {
 type HostGPUData struct {
 	Hostname string    `json:"hostname"`
 	Host     string    `json:"host"`
+	Provider string    `json:"provider,omitempty"`
+	Region   string    `json:"region,omitempty"`
+	Notes    string    `json:"notes,omitempty"`
 	Status   string    `json:"status"`
 	Error    string    `json:"error,omitempty"`
 	GPUs     []GPUInfo `json:"gpus"`

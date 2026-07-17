@@ -36,6 +36,9 @@ func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, 
 		results <- &HostGPUData{
 			Hostname: hostCfg.Name,
 			Host:     hostCfg.Host,
+			Provider: hostCfg.Provider,
+			Region:   hostCfg.Region,
+			Notes:    hostCfg.Notes,
 			Status:   "error",
 			Error:    err.Error(),
 			GPUs:     []GPUInfo{},
@@ -45,6 +48,9 @@ func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, 
 	}
 	log.Printf("[刷新] %s (%s) 成功 %v, %d GPUs", hostCfg.Name, hostCfg.Host, elapsed, len(ParseGPUData(output, hostCfg.Name, hostCfg.Host).GPUs))
 	data := ParseGPUData(output, hostCfg.Name, hostCfg.Host)
+	data.Provider = hostCfg.Provider
+	data.Region = hostCfg.Region
+	data.Notes = hostCfg.Notes
 	data.Order = idx
 	results <- data
 }

@@ -122,6 +122,10 @@
         tr.host-separator:first-child td { border-top: none; }
         .host-tag { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
         .sep-name { font-weight: 700; font-size: 14px; color: var(--text-primary); }
+        .sep-meta { font-size: 12px; color: var(--text-muted); margin-left: 6px; }
+        .sep-notes { font-size: 12px; color: var(--text-secondary); margin-left: 8px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .modal-subtitle { font-size: 13px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+        .modal-subtitle-note { font-size: 13px; font-weight: 400; color: var(--text-secondary); margin-left: 8px; }
         .sep-host-info { display: inline-flex; align-items: center; min-width: 200px; flex-shrink: 0; }
         .sep-status { font-size: 11px; padding: 2px 8px; border-radius: 8px; margin-left: 8px; }
         .sep-status.online { background: rgba(39,174,96,0.3); color: #2ecc71; }
@@ -196,24 +200,28 @@
         <div class="title">GPUBeat<svg class="progress-ring" viewBox="0 0 18 18"><circle class="progress-ring__bg" cx="9" cy="9" r="7" stroke="var(--progress-track)" stroke-width="2" fill="none"/><circle class="progress-ring__circle" ref="progressRing" cx="9" cy="9" r="7" stroke-width="2" stroke-dasharray="43.98" stroke-dashoffset="43.98" stroke-linecap="round"/></svg></div>
         <div class="center">
             <span class="clock-main">{{ currentDate }} {{ currentTime }}</span>
-                <span class="clock-sub">{{ refreshAgo }}秒前刷新</span>
-            <span v-if="errorCount > 0" class="error-badge">⚠ {{ errorCount }} 台异常</span>
+                <span class="clock-sub">{{ t('nav.refreshAgo', {sec: refreshAgo}) }}</span>
+            <span v-if="errorCount > 0" class="error-badge">{{ t('nav.errorCount', {count: errorCount}) }}</span>
         </div>
         <div class="controls">
             <select v-model="selectedHost">
-                <option value="all">全部主机</option>
+                <option value="all">{{ t('nav.allHosts') }}</option>
                 <option v-for="h in hostOptions" :key="h.hostname" :value="h.hostname">{{ h.name }}</option>
             </select>
-            <span style="color:var(--text-nav)">间隔</span>
-            <input type="number" v-model.number="refreshInterval" min="1" max="60"> 秒
-            <button @click="fetchData">刷新</button>
+            <span style="color:var(--text-nav)">{{ t('nav.interval') }}</span>
+            <input type="number" v-model.number="refreshInterval" min="1" max="60"> {{ t('nav.seconds') }}
+            <button @click="fetchData">{{ t('nav.refresh') }}</button>
+            <select v-model="language" @change="setLanguage(language)">
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+            </select>
             <button class="theme-btn" @click="toggleTheme">{{ theme === 'dark' ? '☀' : '🌙' }}</button>
         </div>
     </div>
 
     <div v-if="filteredStats.length === 0 && !update_time" class="empty-state">
         <div class="icon">🖥️</div>
-        <p>等待数据加载...</p>
+        <p>{{ t('empty.waiting') }}</p>
     </div>
 
     <!-- GPU Cards -->
@@ -236,15 +244,15 @@
                 <div class="card-metrics">
                     <div class="card-metric">
                         <div class="val" :class="tempClass(gpu['temperature.gpu'])">{{ gpu['temperature.gpu'] || 0 }}°</div>
-                        <div class="lbl">温度</div>
+                        <div class="lbl">{{ t('metric.temp') }}</div>
                     </div>
                     <div class="card-metric">
                         <div class="val" :class="memClass(gpu.memory)">{{ gpu.memory || 0 }}%</div>
-                        <div class="lbl">显存</div>
+                        <div class="lbl">{{ t('metric.memory') }}</div>
                     </div>
                     <div class="card-metric">
                         <div class="val">{{ gpu['utilization.gpu'] || 0 }}%</div>
-                        <div class="lbl">利用率</div>
+                        <div class="lbl">{{ t('metric.util') }}</div>
                     </div>
                 </div>
                 <div class="card-users">
@@ -260,13 +268,13 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width:260px">GPU</th>
-                        <th style="text-align:center;width:210px">温度</th>
-                        <th style="text-align:center;width:210px">利用率</th>
-                        <th style="text-align:center;width:210px">显存 使用/总量</th>
-                        <th style="width:90px">可用</th>
-                        <th style="width:140px">功耗 使用/上限</th>
-                        <th>用户进程</th>
+                        <th style="width:260px">{{ t('table.gpu') }}</th>
+                        <th style="text-align:center;width:210px">{{ t('metric.temp') }}</th>
+                        <th style="text-align:center;width:210px">{{ t('metric.util') }}</th>
+                        <th style="text-align:center;width:210px">{{ t('table.memUsedTotal') }}</th>
+                        <th style="width:90px">{{ t('table.available') }}</th>
+                        <th style="width:140px">{{ t('table.power') }}</th>
+                        <th>{{ t('table.userProcs') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -277,16 +285,18 @@
                                     <span class="sep-host-info">
                                         <span class="host-tag" :style="{background: hostColor(hi)}"></span>
                                         <span class="sep-name">{{ host.hostname }}</span>
-                                        <span class="sep-status" :class="host.status">{{ host.status === 'online' ? '正常' : '异常' }}</span>
+                                        <span v-if="host.provider || host.region" class="sep-meta">· {{ [host.provider, host.region].filter(Boolean).join(' / ') }}</span>
+                                        <span v-if="host.notes" class="sep-notes" :title="host.notes">📝 {{ host.notes }}</span>
+                                        <span class="sep-status" :class="host.status">{{ host.status === 'online' ? t('host.online') : t('host.error') }}</span>
                                         <span v-if="host.status === 'online' && host.gpus" class="sep-gpu-count">{{ host.gpus.length }} GPUs</span>
                                     </span>
                                     <template v-if="host.status === 'online' && host.sys && host.sys.cpu_usage > 0">
-                                        <span class="sep-sys">CPU <strong>{{ host.sys.cpu_usage.toFixed(1) }}%</strong> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.cpu_usage + '%', background: host.sys.cpu_usage > 85 ? '#e74c3c' : host.sys.cpu_usage > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
-                                        <span class="sep-sys">内存 <span class="sys-mem-val">{{ fmtMemMB(host.sys.mem_used) }}/{{ fmtMemMB(host.sys.mem_total) }}</span> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.mem_percent + '%', background: host.sys.mem_percent > 85 ? '#e74c3c' : host.sys.mem_percent > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
-                                        <span class="sep-sys">负载 <strong>{{ host.sys.load_1.toFixed(2) }} / {{ host.sys.load_5.toFixed(2) }} / {{ host.sys.load_15.toFixed(2) }}</strong></span>
+                                        <span class="sep-sys">{{ t('host.cpu') }} <strong>{{ host.sys.cpu_usage.toFixed(1) }}%</strong> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.cpu_usage + '%', background: host.sys.cpu_usage > 85 ? '#e74c3c' : host.sys.cpu_usage > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
+                                        <span class="sep-sys">{{ t('host.memory') }} <span class="sys-mem-val">{{ fmtMemMB(host.sys.mem_used) }}/{{ fmtMemMB(host.sys.mem_total) }}</span> <span class="sys-mem-mini"><span class="sys-mem-mini-inner" :style="{width: host.sys.mem_percent + '%', background: host.sys.mem_percent > 85 ? '#e74c3c' : host.sys.mem_percent > 60 ? '#f39c12' : '#2ecc71'}"></span></span></span>
+                                        <span class="sep-sys">{{ t('host.load') }} <strong>{{ host.sys.load_1.toFixed(2) }} / {{ host.sys.load_5.toFixed(2) }} / {{ host.sys.load_15.toFixed(2) }}</strong></span>
                                     </template>
                                     <span v-if="host.status === 'error'" style="color:#e74c3c;margin-left:8px">{{ errorIcon(host.error) }} {{ host.error }}</span>
-                                    <span v-if="host.status === 'online'" class="view-detail" @click="openModal(host, hi)">查看详情 →</span>
+                                    <span v-if="host.status === 'online'" class="view-detail" @click="openModal(host, hi)">{{ t('host.viewDetail') }}</span>
                                 </div>
                             </td>
                         </tr>
@@ -328,11 +338,11 @@
 
     <div class="charts-section">
         <div class="chart-container">
-            <h3>用户显存使用</h3>
+            <h3>{{ t('chart.userMem') }}</h3>
             <div class="chart-box" id="barChart"></div>
         </div>
         <div class="chart-container">
-            <h3>GPU 显存使用量占比</h3>
+            <h3>{{ t('chart.gpuMemShare') }}</h3>
             <div class="chart-box" id="pieChart"></div>
         </div>
     </div>
@@ -343,16 +353,18 @@
                 <h2>
                     <span class="host-tag" :style="{background: modalHostColor}"></span>
                     {{ modalHost.hostname }}
+                    <span v-if="modalHost.provider || modalHost.region" class="modal-subtitle">· {{ [modalHost.provider, modalHost.region].filter(Boolean).join(' / ') }}</span>
+                    <span v-if="modalHost.notes" class="modal-subtitle-note">📝 {{ modalHost.notes }}</span>
                 </h2>
                 <button class="modal-close" @click="closeModal">&times;</button>
             </div>
             <div class="modal-charts">
                 <div>
-                    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">用户显存排行</div>
+                    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">{{ t('modal.userMemRank') }}</div>
                     <div class="modal-chart-box" id="modalBarChart"></div>
                 </div>
                 <div>
-                    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">GPU 显存使用率</div>
+                    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">{{ t('modal.gpuMemRate') }}</div>
                     <div class="modal-chart-box" id="modalPieChart"></div>
                 </div>
             </div>
@@ -367,6 +379,80 @@
 <script>
 var HOST_COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#e84393'];
 
+var I18N = {
+    zh: {
+        'nav.allHosts': '全部主机',
+        'nav.interval': '间隔',
+        'nav.seconds': '秒',
+        'nav.refresh': '刷新',
+        'nav.refreshAgo': '{sec}秒前刷新',
+        'nav.errorCount': '⚠ {count} 台异常',
+        'metric.temp': '温度',
+        'metric.memory': '显存',
+        'metric.util': '利用率',
+        'table.gpu': 'GPU',
+        'table.memUsedTotal': '显存 使用/总量',
+        'table.available': '可用',
+        'table.power': '功耗 使用/上限',
+        'table.userProcs': '用户进程',
+        'host.online': '正常',
+        'host.error': '异常',
+        'host.cpu': 'CPU',
+        'host.memory': '内存',
+        'host.load': '负载',
+        'host.viewDetail': '查看详情 →',
+        'chart.userMem': '用户显存使用',
+        'chart.gpuMemShare': 'GPU 显存使用量占比',
+        'modal.userMemRank': '用户显存排行',
+        'modal.gpuMemRate': 'GPU 显存使用率',
+        'empty.waiting': '等待数据加载...',
+        'chart.noProc': '暂无进程数据',
+        'chart.noProcModal': '暂无进程',
+        'chart.noGpu': '暂无GPU数据',
+        'chart.total': '合计: ',
+        'chart.used': '已用: '
+    },
+    en: {
+        'nav.allHosts': 'All hosts',
+        'nav.interval': 'Interval',
+        'nav.seconds': 's',
+        'nav.refresh': 'Refresh',
+        'nav.refreshAgo': '{sec}s ago',
+        'nav.errorCount': '⚠ {count} errors',
+        'metric.temp': 'Temp',
+        'metric.memory': 'VRAM',
+        'metric.util': 'Util',
+        'table.gpu': 'GPU',
+        'table.memUsedTotal': 'VRAM Used/Total',
+        'table.available': 'Free',
+        'table.power': 'Power Used/Limit',
+        'table.userProcs': 'Processes',
+        'host.online': 'online',
+        'host.error': 'error',
+        'host.cpu': 'CPU',
+        'host.memory': 'Memory',
+        'host.load': 'Load',
+        'host.viewDetail': 'Details →',
+        'chart.userMem': 'User VRAM Usage',
+        'chart.gpuMemShare': 'GPU VRAM Usage Share',
+        'modal.userMemRank': 'User VRAM Ranking',
+        'modal.gpuMemRate': 'GPU VRAM Usage',
+        'empty.waiting': 'Waiting for data...',
+        'chart.noProc': 'No process data',
+        'chart.noProcModal': 'No processes',
+        'chart.noGpu': 'No GPU data',
+        'chart.total': 'Total: ',
+        'chart.used': 'Used: '
+    }
+};
+
+function getInitialLanguage() {
+    try {
+        var l = (navigator.language || 'en').toLowerCase();
+        return l.indexOf('zh') === 0 ? 'zh' : 'en';
+    } catch (e) { return 'en'; }
+}
+
 new Vue({
     el: '#app',
     data: {
@@ -379,6 +465,7 @@ new Vue({
         refreshInterval: 3,
         selectedHost: 'all',
         theme: 'light',
+        language: localStorage.getItem('gpu-language') || getInitialLanguage(),
         timer: null,
         clockTimer: null,
         progress: 0,
@@ -413,6 +500,7 @@ new Vue({
             this.theme = saved;
             document.documentElement.setAttribute('data-theme', saved);
         }
+        document.documentElement.lang = (this.language === 'zh' ? 'zh-CN' : 'en');
         this.startClock();
         this.fetchData();
         this.startAutoRefresh();
@@ -426,6 +514,27 @@ new Vue({
     },
     beforeDestroy: function() { this.stopAutoRefresh(); this.stopProgress(); this.stopClock(); },
     methods: {
+        t: function(key, vars) {
+            var dict = I18N[this.language] || I18N.en;
+            var text = dict[key] || I18N.en[key] || key;
+            if (vars) {
+                for (var k in vars) {
+                    text = text.split('{' + k + '}').join(vars[k]);
+                }
+            }
+            return text;
+        },
+        setLanguage: function(lang) {
+            this.language = lang;
+            localStorage.setItem('gpu-language', lang);
+            document.documentElement.lang = (lang === 'zh' ? 'zh-CN' : 'en');
+            this.barHash = '';
+            this.pieHash = '';
+            var self = this;
+            this.$nextTick(function() {
+                setTimeout(function() { self.updateCharts(); }, 50);
+            });
+        },
         fmtMemMB: function(mb) {
             if (!mb || mb <= 0) return "0 MB";
             if (mb >= 1024) return (mb / 1024).toFixed(1) + " GB";
@@ -715,7 +824,7 @@ new Vue({
 
             if (users.length === 0) {
                 this.barChart.clear();
-                this.barChart.setOption({ title: { text: '暂无进程数据', left: 'center', top: 'center', textStyle: { color: '#7f8c8d', fontSize: 14 } } }, true);
+                this.barChart.setOption({ title: { text: self.t('chart.noProc'), left: 'center', top: 'center', textStyle: { color: '#7f8c8d', fontSize: 14 } } }, true);
                 return;
             }
 
@@ -740,7 +849,7 @@ new Vue({
                         }
                     });
                     if (lines.length === 0) return null;
-                    lines.push('<b>合计: ' + total.toFixed(2) + ' GB</b>');
+                    lines.push('<b>' + self.t('chart.total') + total.toFixed(2) + ' GB</b>');
                     return '<b>' + params[0].name + '</b><br>' + lines.join('<br>');
                 }},
                 legend: { top: 0, textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll' },
@@ -810,7 +919,7 @@ new Vue({
 
             if (innerData.length === 0) {
                 this.pieChart.clear();
-                this.pieChart.setOption({ title: { text: '暂无GPU数据', left: 'center', top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 14 } } }, true);
+                this.pieChart.setOption({ title: { text: self.t('chart.noGpu'), left: 'center', top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 14 } } }, true);
                 return;
             }
 
@@ -845,7 +954,7 @@ new Vue({
                     var total = p.data._total || 0;
                     var used = p.data._used || 0;
                     var pct = total > 0 ? (used / total * 100).toFixed(1) : 0;
-                    return p.name + '<br>已用: ' + fmtMem(used) + ' / ' + fmtMem(total) + ' (' + pct + '%)';
+                    return p.name + '<br>' + self.t('chart.used') + fmtMem(used) + ' / ' + fmtMem(total) + ' (' + pct + '%)';
                 }},
                 legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll', data: legendNames },
                 series: [{
@@ -922,7 +1031,7 @@ new Vue({
                         series: [{ type: 'bar', data: values, itemStyle: { color: color, borderRadius: [4,4,0,0] } }]
                     }, true);
                 } else {
-                    this.modalBarChart.setOption({ title: { text: '暂无进程', left: 'center', top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 14 } } }, true);
+                    this.modalBarChart.setOption({ title: { text: self.t('chart.noProcModal'), left: 'center', top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 14 } } }, true);
                 }
             }
 
@@ -988,7 +1097,7 @@ new Vue({
                         var total = p.data._total || 0;
                         var used = p.data._used || 0;
                         var pct = total > 0 ? (used / total * 100).toFixed(1) : 0;
-                        return p.name + '<br>已用: ' + Math.round(used) + ' / ' + Math.round(total) + ' MiB (' + pct + '%)';
+                        return p.name + '<br>' + self.t('chart.used') + Math.round(used) + ' / ' + Math.round(total) + ' MiB (' + pct + '%)';
                     }},
                     legend: { orient: 'vertical', right: 0, top: 'center', textStyle: { color: self.chartTextColor(), fontSize: 11 }, type: 'scroll', data: legendNames },
                     series: [{
