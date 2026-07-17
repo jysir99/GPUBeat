@@ -60,10 +60,10 @@
         .navbar .title { font-size: 20px; font-weight: 700; color: var(--text-nav-title); white-space: nowrap; display: flex; align-items: center; gap: 8px; }
         .progress-ring { width: 18px; height: 18px; transform: rotate(-90deg); flex-shrink: 0; }
         .progress-ring__circle { stroke: var(--progress-bar); fill: none; }
-        .navbar .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; color: var(--text-nav); }
+        .navbar .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; color: var(--text-nav); position: relative; }
         .clock-main { font-size: 15px; font-weight: 600; letter-spacing: 1px; }
         .clock-sub { font-size: 11px; opacity: 0.6; margin-top: 1px; }
-        .error-badge { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .error-badge { background: #e67e22; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; position: absolute; right: calc(100% + 12px); top: 50%; transform: translateY(-50%); white-space: nowrap; }
         .navbar .controls { display: flex; align-items: center; gap: 8px; white-space: nowrap; justify-self: end; }
         .navbar .controls select, .navbar .controls input { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-nav-btn); background: var(--bg-nav-btn); color: var(--text-primary); font-size: 13px; }
         .navbar .controls select { min-width: 140px; }
@@ -176,6 +176,7 @@
             .navbar { display: flex; flex-wrap: wrap; padding: 8px 12px; gap: 6px 0; }
             .navbar .title { font-size: 17px; }
             .navbar .center { flex-direction: row; align-items: center; gap: 8px; margin-left: auto; }
+            .error-badge { position: static; transform: none; top: auto; right: auto; }
             .clock-sub { margin-top: 0; }
             .navbar .controls { width: 100%; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
             .navbar .controls select { min-width: 0; flex: 1; }
