@@ -34,15 +34,16 @@ func fetchHost(ctx context.Context, pool *SSHPool, hostCfg HostConfig, idx int, 
 	if err != nil {
 		log.Printf("[刷新] %s (%s) 失败 %v: %s", hostCfg.Name, hostCfg.Host, elapsed, err)
 		results <- &HostGPUData{
-			Hostname: hostCfg.Name,
-			Host:     hostCfg.Host,
-			Provider: hostCfg.Provider,
-			Region:   hostCfg.Region,
-			Notes:    hostCfg.Notes,
-			Status:   "error",
-			Error:    err.Error(),
-			GPUs:     []GPUInfo{},
-			Order:    idx,
+			Hostname:   hostCfg.Name,
+			Host:       hostCfg.Host,
+			Provider:   hostCfg.Provider,
+			Region:     hostCfg.Region,
+			Notes:      hostCfg.Notes,
+			Status:     "error",
+			Error:      err.Error(),
+			ErrorBrief: briefError(err.Error()),
+			GPUs:       []GPUInfo{},
+			Order:      idx,
 		}
 		return
 	}

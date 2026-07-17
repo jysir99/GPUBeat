@@ -39,16 +39,17 @@ type SysInfo struct {
 }
 
 type HostGPUData struct {
-	Hostname string    `json:"hostname"`
-	Host     string    `json:"host"`
-	Provider string    `json:"provider,omitempty"`
-	Region   string    `json:"region,omitempty"`
-	Notes    string    `json:"notes,omitempty"`
-	Status   string    `json:"status"`
-	Error    string    `json:"error,omitempty"`
-	GPUs     []GPUInfo `json:"gpus"`
-	Sys      SysInfo   `json:"sys"`
-	Order    int       `json:"-"`
+	Hostname   string    `json:"hostname"`
+	Host       string    `json:"host"`
+	Provider   string    `json:"provider,omitempty"`
+	Region     string    `json:"region,omitempty"`
+	Notes      string    `json:"notes,omitempty"`
+	Status     string    `json:"status"`
+	Error      string    `json:"-"`               // 完整错误,仅供日志,不输出到前端
+	ErrorBrief string    `json:"error,omitempty"` // 简短错误分类,输出到前端
+	GPUs       []GPUInfo `json:"gpus"`
+	Sys        SysInfo   `json:"sys"`
+	Order      int       `json:"-"`
 }
 
 func ParseGPUData(rawOutput, hostname, host string) *HostGPUData {
@@ -88,7 +89,8 @@ func ParseGPUData(rawOutput, hostname, host string) *HostGPUData {
 
 	if len(result.GPUs) == 0 && gpuSection != "" {
 		result.Status = "error"
-		result.Error = fmt.Sprintf("数据解析异常: 未检测到GPU信息")
+		result.Error = "数据解析异常: 未检测到GPU信息"
+		result.ErrorBrief = briefError(result.Error)
 	}
 
 	return result
@@ -246,6 +248,16 @@ func safeFloat(s string) float64 {
 
 func roundToOne(v float64) float64 {
 	return float64(int(v+0.5)) / 1
+}
+
+// briefError 将 "前缀: 详情" 形式的错误截断为简短前缀,供前端展示;
+// 完整错误仍写入日志(logger.LogHost 与 main 的 log.Printf)。
+func briefError(msg string) string {
+	msg = strings.TrimSpace(msg)
+	if i := strings.Index(msg, ": "); i > 0 {
+		return msg[:i]
+	}
+	return msg
 }
 
 var (
